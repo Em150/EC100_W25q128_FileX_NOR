@@ -39,7 +39,12 @@ INT lx_stm32_ospi_lowlevel_init(UINT instance)
   INT status = 0;
 
   /* USER CODE BEGIN PRE_OSPI_INIT */
-  return 0;
+	if (ospi_memory_reset(&hospi1) != 0)
+	{
+		return 1;
+	}
+	return 0;
+
   /* USER CODE END PRE_OSPI_INIT */
 
   /* Call the DeInit function to reset the driver */
@@ -102,7 +107,7 @@ INT lx_stm32_ospi_get_status(UINT instance)
   uint8_t reg[2];
 
   /* USER CODE BEGIN PRE_OSPI_GET_STATUS */
-
+	//return lx_stm32_ospi_get_statusW25Q125(instance);
   /* USER CODE END PRE_OSPI_GET_STATUS */
 
   /* Initialize the read status register command */
@@ -128,10 +133,17 @@ INT lx_stm32_ospi_get_status(UINT instance)
   s_command.DQSMode               = HAL_XSPI_DQS_ENABLE;
 
   /* USER CODE BEGIN GET_STATUS_CMD */
-  s_command.InstructionDTRMode    = HAL_XSPI_INSTRUCTION_DTR_DISABLE;
-    s_command.AddressDTRMode        = HAL_XSPI_ADDRESS_DTR_DISABLE;
-    s_command.DataDTRMode           = HAL_XSPI_DATA_DTR_DISABLE;
-    s_command.DQSMode               = HAL_XSPI_DQS_DISABLE;
+  s_command.DataLength            	= 1;
+  s_command.Address               	= 0;
+  s_command.AddressMode             = HAL_XSPI_ADDRESS_NONE;
+  s_command.AddressWidth          	= HAL_XSPI_ADDRESS_8_BITS;
+  s_command.InstructionMode 		= HAL_XSPI_INSTRUCTION_1_LINE;
+  s_command.InstructionWidth      	= HAL_XSPI_INSTRUCTION_8_BITS;
+  s_command.InstructionDTRMode 		= HAL_XSPI_INSTRUCTION_DTR_DISABLE;
+  s_command.AddressDTRMode 			= HAL_XSPI_ADDRESS_DTR_DISABLE;
+  s_command.DataDTRMode 			= HAL_XSPI_DATA_DTR_DISABLE;
+  s_command.DQSMode 				= HAL_XSPI_DQS_DISABLE;
+  s_command.DataMode                = HAL_XSPI_DATA_1_LINE;
   /* USER CODE END GET_STATUS_CMD */
 
   /* Configure the command */
@@ -198,7 +210,25 @@ INT lx_stm32_ospi_read(UINT instance, ULONG *address, ULONG *buffer, ULONG words
   XSPI_RegularCmdTypeDef s_command;
 
   /* USER CODE BEGIN PRE_OSPI_READ */
-
+	XSPI_RegularCmdTypeDef CMD = { 0 };
+	CMD.Instruction = 0x6b;
+	CMD.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
+	CMD.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
+	CMD.DataLength = 4;
+	CMD.DataMode = HAL_XSPI_DATA_4_LINES;
+	CMD.DummyCycles = 8;
+	CMD.AddressWidth = HAL_XSPI_ADDRESS_24_BITS;
+	CMD.Address = (uint32_t)address;
+	if (HAL_XSPI_Command(&hospi1, &CMD, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+	{
+		return 1;
+	}
+	ospi_rx_cplt = 0;
+	if (HAL_XSPI_Receive_DMA(&hospi1, (uint8_t*) buffer) != HAL_OK)
+	{
+		return 1;
+	}
+	 return status;
   /* USER CODE END PRE_OSPI_READ */
 
   /* Initialize the read command */

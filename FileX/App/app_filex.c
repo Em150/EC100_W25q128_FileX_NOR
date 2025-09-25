@@ -51,6 +51,7 @@ FX_MEDIA        sdio_disk;
 //FX_MEDIA sram_disk;
 /* FileX file instance */
 FX_FILE fx_file;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -74,7 +75,7 @@ UINT MX_FileX_Init(void)
   fx_system_initialize();
 
   /* USER CODE BEGIN MX_FileX_Init 1*/
-  Formateo();
+
   /* USER CODE END MX_FileX_Init 1*/
 
   return ret;
@@ -94,7 +95,7 @@ void Formateo()
 	            1,                          /* Número de FATs */
 	            32,                         /* Directorio raíz (entradas) */
 	            0,                          /* Sectores ocultos */
-	            32768-1,                      /* Total sectores lógicos */
+	            32768,                      /* Total sectores lógicos */
 	            512,                        /* Tamaño de sector lógico en bytes */
 	            8,                          /* Sectores por clúster */
 	            1,                          /* Número de cabezas */

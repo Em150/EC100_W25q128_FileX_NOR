@@ -113,7 +113,7 @@
 /* Define the logical sector size for NOR flash. The sector size is in units of 32-bit words.
    This sector size should match the sector size used in file system.  */
 
-/* #define LX_NOR_SECTOR_SIZE         (512/sizeof(ULONG)) */
+#define LX_NOR_SECTOR_SIZE         (4096/sizeof(ULONG))
 
 /* By default this value is 4, which represents a maximum of 4 blocks that
    can be allocated for metadata.
