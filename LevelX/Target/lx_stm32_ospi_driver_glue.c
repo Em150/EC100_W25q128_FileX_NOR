@@ -27,7 +27,7 @@ __IO UINT ospi_rx_cplt;
 __IO UINT ospi_tx_cplt;
 
 /* USER CODE BEGIN 0 */
-
+static uint8_t ospi_set_write_enable_Custom(XSPI_HandleTypeDef *hxspi);
 /* USER CODE END 0 */
 /**
 * @brief system init for octospi levelx driver
@@ -211,10 +211,11 @@ INT lx_stm32_ospi_read(UINT instance, ULONG *address, ULONG *buffer, ULONG words
 
   /* USER CODE BEGIN PRE_OSPI_READ */
 	XSPI_RegularCmdTypeDef CMD = { 0 };
+	ULONG i = 0;
 	CMD.Instruction = 0x6b;
 	CMD.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
 	CMD.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
-	CMD.DataLength = 4;
+	CMD.DataLength = (uint32_t) words * sizeof(ULONG);
 	CMD.DataMode = HAL_XSPI_DATA_4_LINES;
 	CMD.DummyCycles = 8;
 	CMD.AddressWidth = HAL_XSPI_ADDRESS_24_BITS;
@@ -227,6 +228,11 @@ INT lx_stm32_ospi_read(UINT instance, ULONG *address, ULONG *buffer, ULONG words
 	if (HAL_XSPI_Receive_DMA(&hospi1, (uint8_t*) buffer) != HAL_OK)
 	{
 		return 1;
+	}
+	if(CMD.DataLength <=4)//lo necesito para que el procesamiento de la recepcion no sea mas rapido que la velocidad de recepcin misma
+	{
+		for(i = 0;  i < 80;i++)
+				__NOP();
 	}
 	 return status;
   /* USER CODE END PRE_OSPI_READ */
@@ -301,7 +307,7 @@ INT lx_stm32_ospi_write(UINT instance, ULONG *address, ULONG *buffer, ULONG word
   UINT timeout_start;
 
   /* USER CODE BEGIN PRE_OSPI_WRITE */
-
+  UINT i;
   /* USER CODE END PRE_OSPI_WRITE */
 
   /* Calculation of the size between the write address and the end of the page */
@@ -339,7 +345,72 @@ INT lx_stm32_ospi_write(UINT instance, ULONG *address, ULONG *buffer, ULONG word
   s_command.DQSMode               = HAL_XSPI_DQS_ENABLE;
 
   /* USER CODE BEGIN OSPI_WRITE_CMD */
+  s_command.AddressMode             = HAL_XSPI_ADDRESS_1_LINE;
+  s_command.AddressWidth          	= HAL_XSPI_ADDRESS_24_BITS;
+  s_command.InstructionMode 		= HAL_XSPI_INSTRUCTION_1_LINE;
+  s_command.InstructionWidth      	= HAL_XSPI_INSTRUCTION_8_BITS;
+  s_command.InstructionDTRMode 		= HAL_XSPI_INSTRUCTION_DTR_DISABLE;
+  s_command.AddressDTRMode 			= HAL_XSPI_ADDRESS_DTR_DISABLE;
+  s_command.DataDTRMode 			= HAL_XSPI_DATA_DTR_DISABLE;
+  s_command.DQSMode 				= HAL_XSPI_DQS_DISABLE;
+  s_command.DataMode                = HAL_XSPI_DATA_1_LINE;
+  do
+    {
+      s_command.Address = current_addr;
+      s_command.DataLength  = current_size;
 
+      /* Enable write operations */
+      if (ospi_set_write_enable_Custom(&hospi1) != 0)
+      {
+        return 1;
+      }
+
+      /* Configure the command */
+      if (HAL_XSPI_Command(&hospi1, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+      {
+        return 1;
+      }
+
+      /* Transmission of the data */
+      if (HAL_XSPI_Transmit_DMA(&hospi1, (uint8_t*)data_buffer) != HAL_OK)
+      {
+        return 1;
+      }
+      /* Check success of the transmission of the data */
+
+      timeout_start = HAL_GetTick();
+      while (HAL_GetTick() - timeout_start < LX_STM32_OSPI_DEFAULT_TIMEOUT)
+      {
+        if (ospi_tx_cplt == 1)
+          break;
+      }
+
+      if (ospi_tx_cplt == 0)
+      {
+        return 1;
+      }
+      else
+      {
+    	  for(i = 0;  i < 80000;i++)
+    	  		__NOP();
+        /* Configure automatic polling mode to wait for end of program */
+//        if (ospi_auto_polling_ready(&hospi1, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != 0)
+//        {
+          /* on Error reset the ospi_tx_cplt to 0 to make the LX_STM32_OSPI_WRITE_CPLT_NOTIFY() fail */
+//          ospi_tx_cplt = 0;
+//          return 1;
+//        }
+//        else
+//        {
+          /* Update the address and data variables for next page programming */
+          current_addr += current_size;
+          data_buffer += current_size;
+
+          current_size = ((current_addr + LX_STM32_OSPI_PAGE_SIZE) > end_addr) ? (end_addr - current_addr) : LX_STM32_OSPI_PAGE_SIZE;
+//        }
+      }
+    } while(current_addr < end_addr);
+  return status;
   /* USER CODE END OSPI_WRITE_CMD */
 
   /* Perform the write page by page */
@@ -456,9 +527,22 @@ INT lx_stm32_ospi_erase(UINT instance, ULONG block, ULONG erase_count, UINT full
   }
 
   /* USER CODE BEGIN OSPI_ERASE_CMD */
+  s_command.InstructionMode       = HAL_XSPI_INSTRUCTION_1_LINE;
+  s_command.InstructionWidth      = HAL_XSPI_INSTRUCTION_8_BITS;
+  s_command.AddressWidth          = HAL_XSPI_ADDRESS_24_BITS;
+  if(!full_chip_erase)
+	  s_command.AddressMode         = HAL_XSPI_ADDRESS_1_LINE;
 
+  if (ospi_set_write_enable_Custom(&hospi1) != 0)
+    {
+      return 1;
+    }
+  if (HAL_XSPI_Command(&hospi1, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+    {
+      return 1;
+    }
+  return status;
   /* USER CODE END OSPI_ERASE_CMD */
-
   /* Enable write operations */
   if (ospi_set_write_enable(&hospi1) != 0)
   {
@@ -495,7 +579,31 @@ INT lx_stm32_ospi_is_block_erased(UINT instance, ULONG block)
   INT status = 0;
 
   /* USER CODE BEGIN OSPI_BLOCK_ERASED */
-
+  XSPI_RegularCmdTypeDef CMD = { 0 };
+  UINT i = 0;
+  	CMD.Instruction = 0x6b;
+  	CMD.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
+  	CMD.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
+  	CMD.DataLength = LX_STM32_OSPI_SECTOR_SIZE;
+  	CMD.DataMode = HAL_XSPI_DATA_4_LINES;
+  	CMD.DummyCycles = 8;
+  	CMD.AddressWidth = HAL_XSPI_ADDRESS_24_BITS;
+  	CMD.Address = block * LX_STM32_OSPI_SECTOR_SIZE;
+  	if (HAL_XSPI_Command(&hospi1, &CMD, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  	{
+  		return 1;
+  	}
+  	if (HAL_XSPI_Receive(&hospi1, (uint8_t*) ospi_sector_buffer,HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  	{
+  		return 1;
+  	}
+  	for(i = 0; i < LX_STM32_OSPI_SECTOR_SIZE/sizeof(ULONG);i++)
+  	{
+  		if(ospi_sector_buffer[i] != 0xFFFFFFFFUL)
+  		{
+  			return 1;
+  		}
+  	}
   /* USER CODE END OSPI_BLOCK_ERASED */
 
   return status;
@@ -902,5 +1010,26 @@ void HAL_XSPI_TxCpltCallback(XSPI_HandleTypeDef *hxspi)
 }
 
 /* USER CODE BEGIN 1 */
+static uint8_t ospi_set_write_enable_Custom(XSPI_HandleTypeDef *hxspi)
+{
+  uint8_t status = 0;
 
+  XSPI_RegularCmdTypeDef  s_command = {0};
+
+
+  s_command.Instruction           = LX_STM32_OSPI_OCTAL_WRITE_ENABLE_CMD;
+  s_command.InstructionMode       = HAL_XSPI_INSTRUCTION_1_LINE;
+  s_command.InstructionWidth      = HAL_XSPI_INSTRUCTION_8_BITS;
+  //s_command.InstructionDTRMode    = HAL_XSPI_INSTRUCTION_DTR_ENABLE;
+  if (HAL_XSPI_Command(&hospi1, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  {
+    return 1;
+  }
+/*
+  if (ospi_auto_polling_ready(hxspi, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != 0)
+  {
+    return 1;
+  }*/
+  return status;
+}
 /* USER CODE END 1 */
