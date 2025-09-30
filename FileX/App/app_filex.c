@@ -95,8 +95,8 @@ void Formateo()
 	            1,                          /* Número de FATs */
 	            32,                         /* Directorio raíz (entradas) */
 	            0,                          /* Sectores ocultos */
-	            4096,                      /* Total sectores lógicos */
-	            4096,                        /* Tamaño de sector lógico en bytes */
+	            (1024*1024*16/8 - 1024*4)/512,/* Total sectores lógicos */
+	            512,                        /* Tamaño de sector lógico en bytes */
 	            8,                          /* Sectores por clúster */
 	            1,                          /* Número de cabezas */
 	            1                           /* Sectores por pista */

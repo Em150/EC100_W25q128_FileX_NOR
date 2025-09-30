@@ -40,6 +40,7 @@ static uint8_t lx_stm32_ospi_get_statusBlockingW25Q125(XSPI_HandleTypeDef *hxspi
 {
 	XSPI_RegularCmdTypeDef CMD = { 0 };
 	XSPI_AutoPollingTypeDef POLL = { 0 };
+	HAL_StatusTypeDef status = HAL_OK;
 	CMD.Instruction = 0x05;
 	CMD.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
 	CMD.DataLength = 1;
@@ -51,7 +52,8 @@ static uint8_t lx_stm32_ospi_get_statusBlockingW25Q125(XSPI_HandleTypeDef *hxspi
 	POLL.IntervalTime = 0x2FF;
 	POLL.MatchValue = 0;
 	POLL.MatchMask = 1;
-	if(HAL_XSPI_AutoPolling(&hospi1, &POLL, timeout) != HAL_OK)
+	status = HAL_XSPI_AutoPolling(&hospi1, &POLL, timeout);
+	if(status != HAL_OK)
 	{
 		return 1;
 	}
@@ -100,9 +102,13 @@ uint8_t lx_stm32_ospi_writeW25Q125(UINT instance, ULONG *address, ULONG *buffer,
 	s_command.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
 	s_command.AddressWidth = HAL_XSPI_ADDRESS_24_BITS;
 	s_command.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
-	s_command.DataMode = HAL_XSPI_DATA_4_LINES;
-	s_command.Instruction = LX_STM32_OSPI_OCTAL_PAGE_PROG_CMD;
+	////s_command.DataMode = HAL_XSPI_DATA_4_LINES;
+	////s_command.Instruction = LX_STM32_OSPI_OCTAL_PAGE_PROG_CMD;
 
+
+	///nota: cambiar a LX_STM32_OSPI_OCTAL_PAGE_PROG_CMD porque el analizador logico no lee bien estricuras en qspi
+	s_command.Instruction = 0x02;
+	s_command.DataMode = HAL_XSPI_DATA_1_LINE;
 	do
 	{
 		s_command.Address = current_addr;
@@ -131,6 +137,7 @@ uint8_t lx_stm32_ospi_writeW25Q125(UINT instance, ULONG *address, ULONG *buffer,
 		/* Check success of the transmission of the data */
 
 		timeout_start = HAL_GetTick();
+		ospi_tx_cplt = 0;
 		while (HAL_GetTick() - timeout_start < LX_STM32_OSPI_DEFAULT_TIMEOUT)
 		{
 			if (ospi_tx_cplt == 1)
@@ -145,7 +152,7 @@ uint8_t lx_stm32_ospi_writeW25Q125(UINT instance, ULONG *address, ULONG *buffer,
 		else
 		{
 
-			if (lx_stm32_ospi_get_statusBlockingW25Q125(&hospi1,3) != 0)
+			if (lx_stm32_ospi_get_statusBlockingW25Q125(&hospi1,300) != 0)
 			{
 				ospi_tx_cplt = 0;
 				status = 1;

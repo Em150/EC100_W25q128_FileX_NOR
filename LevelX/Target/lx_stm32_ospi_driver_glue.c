@@ -207,7 +207,8 @@ INT lx_stm32_ospi_read(UINT instance, ULONG *address, ULONG *buffer, ULONG words
 
   /* USER CODE BEGIN PRE_OSPI_READ */
 	XSPI_RegularCmdTypeDef CMD = { 0 };
-	ULONG i = 0;
+	//ULONG i = 0;
+	UINT timeout_start;
 	CMD.Instruction = 0x6b;
 	CMD.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
 	CMD.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
@@ -225,11 +226,17 @@ INT lx_stm32_ospi_read(UINT instance, ULONG *address, ULONG *buffer, ULONG words
 	{
 		return 1;
 	}
+	timeout_start = HAL_GetTick();
+	while (HAL_GetTick() - timeout_start < LX_STM32_OSPI_DEFAULT_TIMEOUT) {
+		if (ospi_rx_cplt == 1)
+			break;
+	}
+	/*
 	if(CMD.DataLength <=4)//lo necesito para que el procesamiento de la recepcion no sea mas rapido que la velocidad de recepcin misma
 	{
 		for(i = 0;  i < 80;i++)
 				__NOP();
-	}
+	}*/
 	 return status;
   /* USER CODE END PRE_OSPI_READ */
 
