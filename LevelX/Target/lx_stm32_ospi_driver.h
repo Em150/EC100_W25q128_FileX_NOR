@@ -198,7 +198,7 @@ UINT lx_stm32_ospi_initialize(LX_NOR_FLASH *nor_flash);
 #define LX_STM32_OSPI_RESET_ENABLE_CMD            0x66
 #define LX_STM32_OSPI_RESET_MEMORY_CMD            0x99
 
-#define LX_STM32_OSPI_OCTAL_PAGE_PROG_CMD         0x02
+#define LX_STM32_OSPI_OCTAL_PAGE_PROG_CMD         0x32
 
 #define LX_STM32_OSPI_CR2_REG3_ADDR               0x00
 #define LX_STM32_OSPI_CR2_REG1_ADDR               0x00

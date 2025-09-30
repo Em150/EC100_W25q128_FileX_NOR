@@ -39,11 +39,7 @@ INT lx_stm32_ospi_lowlevel_init(UINT instance)
   INT status = 0;
 
   /* USER CODE BEGIN PRE_OSPI_INIT */
-	if (ospi_memory_reset(&hospi1) != 0)
-	{
-		return 1;
-	}
-	return 0;
+  return lx_stm32_ospi_lowlevel_initW25Q125(instance);
 
   /* USER CODE END PRE_OSPI_INIT */
 
@@ -107,7 +103,7 @@ INT lx_stm32_ospi_get_status(UINT instance)
   uint8_t reg[2];
 
   /* USER CODE BEGIN PRE_OSPI_GET_STATUS */
-	//return lx_stm32_ospi_get_statusW25Q125(instance);
+	return lx_stm32_ospi_get_statusW25Q125(instance);
   /* USER CODE END PRE_OSPI_GET_STATUS */
 
   /* Initialize the read status register command */
@@ -307,7 +303,7 @@ INT lx_stm32_ospi_write(UINT instance, ULONG *address, ULONG *buffer, ULONG word
   UINT timeout_start;
 
   /* USER CODE BEGIN PRE_OSPI_WRITE */
-  UINT i;
+  return lx_stm32_ospi_writeW25Q125(instance,address,buffer,words);
   /* USER CODE END PRE_OSPI_WRITE */
 
   /* Calculation of the size between the write address and the end of the page */
@@ -345,72 +341,7 @@ INT lx_stm32_ospi_write(UINT instance, ULONG *address, ULONG *buffer, ULONG word
   s_command.DQSMode               = HAL_XSPI_DQS_ENABLE;
 
   /* USER CODE BEGIN OSPI_WRITE_CMD */
-  s_command.AddressMode             = HAL_XSPI_ADDRESS_1_LINE;
-  s_command.AddressWidth          	= HAL_XSPI_ADDRESS_24_BITS;
-  s_command.InstructionMode 		= HAL_XSPI_INSTRUCTION_1_LINE;
-  s_command.InstructionWidth      	= HAL_XSPI_INSTRUCTION_8_BITS;
-  s_command.InstructionDTRMode 		= HAL_XSPI_INSTRUCTION_DTR_DISABLE;
-  s_command.AddressDTRMode 			= HAL_XSPI_ADDRESS_DTR_DISABLE;
-  s_command.DataDTRMode 			= HAL_XSPI_DATA_DTR_DISABLE;
-  s_command.DQSMode 				= HAL_XSPI_DQS_DISABLE;
-  s_command.DataMode                = HAL_XSPI_DATA_1_LINE;
-  do
-    {
-      s_command.Address = current_addr;
-      s_command.DataLength  = current_size;
 
-      /* Enable write operations */
-      if (ospi_set_write_enable_Custom(&hospi1) != 0)
-      {
-        return 1;
-      }
-
-      /* Configure the command */
-      if (HAL_XSPI_Command(&hospi1, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-      {
-        return 1;
-      }
-
-      /* Transmission of the data */
-      if (HAL_XSPI_Transmit_DMA(&hospi1, (uint8_t*)data_buffer) != HAL_OK)
-      {
-        return 1;
-      }
-      /* Check success of the transmission of the data */
-
-      timeout_start = HAL_GetTick();
-      while (HAL_GetTick() - timeout_start < LX_STM32_OSPI_DEFAULT_TIMEOUT)
-      {
-        if (ospi_tx_cplt == 1)
-          break;
-      }
-
-      if (ospi_tx_cplt == 0)
-      {
-        return 1;
-      }
-      else
-      {
-    	  for(i = 0;  i < 80000;i++)
-    	  		__NOP();
-        /* Configure automatic polling mode to wait for end of program */
-//        if (ospi_auto_polling_ready(&hospi1, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != 0)
-//        {
-          /* on Error reset the ospi_tx_cplt to 0 to make the LX_STM32_OSPI_WRITE_CPLT_NOTIFY() fail */
-//          ospi_tx_cplt = 0;
-//          return 1;
-//        }
-//        else
-//        {
-          /* Update the address and data variables for next page programming */
-          current_addr += current_size;
-          data_buffer += current_size;
-
-          current_size = ((current_addr + LX_STM32_OSPI_PAGE_SIZE) > end_addr) ? (end_addr - current_addr) : LX_STM32_OSPI_PAGE_SIZE;
-//        }
-      }
-    } while(current_addr < end_addr);
-  return status;
   /* USER CODE END OSPI_WRITE_CMD */
 
   /* Perform the write page by page */
@@ -495,7 +426,7 @@ INT lx_stm32_ospi_erase(UINT instance, ULONG block, ULONG erase_count, UINT full
   XSPI_RegularCmdTypeDef s_command;
 
   /* USER CODE BEGIN PRE_OSPI_ERASE */
-
+  return lx_stm32_ospi_eraseW25Q125(instance,block,erase_count,full_chip_erase);
   /* USER CODE END PRE_OSPI_ERASE */
 
   /* Initialize the erase command */
@@ -543,6 +474,7 @@ INT lx_stm32_ospi_erase(UINT instance, ULONG block, ULONG erase_count, UINT full
     }
   return status;
   /* USER CODE END OSPI_ERASE_CMD */
+
   /* Enable write operations */
   if (ospi_set_write_enable(&hospi1) != 0)
   {
