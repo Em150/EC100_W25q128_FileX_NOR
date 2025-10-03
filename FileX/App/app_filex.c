@@ -23,7 +23,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "stdio.h"
+#include <stdarg.h>
+#include "main.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,6 +60,11 @@ FX_FILE fx_file;
 
 /* USER CODE BEGIN PFP */
 void Formateo();
+int Custom_Sprintf(FX_FILE *NomArchivo ,const char *format,...);
+void CrearArchi(void);
+void LecturaTexto(void);
+void CreacionCarpeta(char *NomCarpeta);
+
 /* USER CODE END PFP */
 /**
   * @brief  Application FileX Initialization.
@@ -107,5 +114,258 @@ void Formateo()
 	  {
 	    Error_Handler();
 	  }
+}
+void CrearArchi(void)
+ {
+	UINT status;
+	CHAR data[1024] = "Texto aburrido";
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	status = fx_media_open(&sdio_disk, "STM32_SRAM_DISK", fx_stm32_levelx_nor_driver,
+			(VOID *)LX_NOR_OSPI_DRIVER_ID, (VOID *) fx_nor_ospi_media_memory,
+			sizeof(fx_nor_ospi_media_memory));
+
+	/* Check the media open status. */
+	if (status != FX_SUCCESS) {
+		Error_Handler();
+	}
+	//fx_file_delete(&sdio_disk, "STM32.TXT");
+	status = fx_file_delete(&sdio_disk, "STM32.txt");
+	if (status == FX_NOT_FOUND || status == FX_SUCCESS) {
+		status = fx_file_create(&sdio_disk, "STM32.txt");
+		if (status != FX_SUCCESS) {
+			Error_Handler();
+		}
+	}
+
+	status = fx_file_open(&sdio_disk, &fx_file, "STM32.txt", FX_OPEN_FOR_WRITE);
+
+	/* Check the file open status. */
+	if (status != FX_SUCCESS) {
+		/* Error opening file, call error handler. */
+		Error_Handler();
+	}
+
+	/* Seek to the beginning of the test file. */
+	status = fx_file_seek(&fx_file, 0);
+
+	/* Check the file seek status. */
+	if (status != FX_SUCCESS) {
+		/* Error performing file seek, call error handler. */
+		Error_Handler();
+	}
+	/* Write a string to the test file. */
+	int A = 0;
+	int B = -34252;
+	status = fx_file_write(&fx_file, data, strlen(data));
+
+	/* Check the file write status. */
+	if (status != FX_SUCCESS) {
+		/* Error writing to a file, call error handler. */
+		Error_Handler();
+	}
+	Custom_Sprintf(&fx_file, "tEXT %d %d", A, B);
+
+	/* Close the test file. */
+	status = fx_file_close(&fx_file);
+
+	/* Check the file close status. */
+	if (status != FX_SUCCESS) {
+		/* Error closing the file, call error handler. */
+		Error_Handler();
+	}
+
+	status = fx_media_flush(&sdio_disk);
+
+	/* Check the media flush  status. */
+	if (status != FX_SUCCESS) {
+		/* Error closing the file, call error handler. */
+		Error_Handler();
+	}
+	status = fx_media_close(&sdio_disk);
+
+	/* Check the media close status. */
+	if (status != FX_SUCCESS) {
+		/* Error closing the media, call error handler. */
+		Error_Handler();
+	}
+}
+void CreacionCarpeta(char *NomCarpeta)
+ {
+ 	UINT status;
+ 		CHAR data[1024] = "Texto aburrido";
+	status = fx_media_open(&sdio_disk, "STM32_SRAM_DISK",
+			fx_stm32_levelx_nor_driver, (VOID *)LX_NOR_OSPI_DRIVER_ID,
+			(VOID *) fx_nor_ospi_media_memory,
+			sizeof(fx_nor_ospi_media_memory));
+
+ 	uint8_t Dato[40];
+ 	Dato[0] = '\\';
+ 	//Dato[1] = '\\';
+ 	sprintf((char *)Dato +1,NomCarpeta);
+ 	status = fx_directory_default_set(&sdio_disk,(CHAR *)Dato);
+ 	if(status == FX_INVALID_PATH)
+ 	{
+ 		status = fx_directory_create(&sdio_disk,NomCarpeta);
+ 		if (status != FX_SUCCESS)
+ 			Error_Handler();
+ 	}
+ 	status = fx_directory_default_set(&sdio_disk,(CHAR *)Dato);
+ 	if (status != FX_SUCCESS)
+ 		Error_Handler();
+ 	status = fx_file_delete(&sdio_disk, "STM32.txt");
+ 		if(status == FX_NOT_FOUND)
+ 		{
+ 			  status = fx_file_create(&sdio_disk, "STM32.txt");
+ 			  if(status != FX_SUCCESS)
+ 			  {
+ 				  Error_Handler();
+ 			  }
+ 		}
+
+ 		status = fx_file_open(&sdio_disk, &fx_file, "STM32.txt", FX_OPEN_FOR_WRITE);
+
+ 		/* Check the file open status. */
+ 		if (status != FX_SUCCESS)
+ 		{
+ 			/* Error opening file, call error handler. */
+ 			Error_Handler();
+ 		}
+
+ 		/* Seek to the beginning of the test file. */
+ 		status = fx_file_seek(&fx_file, 0);
+
+ 		/* Check the file seek status. */
+ 		if (status != FX_SUCCESS)
+ 		{
+ 			/* Error performing file seek, call error handler. */
+ 			Error_Handler();
+ 		}
+ 		/* Write a string to the test file. */
+ 		int A = 0;
+ 		int B = -34252;
+ 		status = fx_file_write(&fx_file, data, strlen(data));
+
+ 		/* Check the file write status. */
+ 		if (status != FX_SUCCESS)
+ 		{
+ 			/* Error writing to a file, call error handler. */
+ 			Error_Handler();
+ 		}
+ 		Custom_Sprintf(&fx_file, "tEXT %d %d", A , B);
+
+ 		/* Close the test file. */
+ 		status = fx_file_close(&fx_file);
+
+ 		/* Check the file close status. */
+ 		if (status != FX_SUCCESS)
+ 		{
+ 			/* Error closing the file, call error handler. */
+ 			Error_Handler();
+ 		}
+
+ 		status = fx_media_flush(&sdio_disk);
+
+ 		/* Check the media flush  status. */
+ 		if (status != FX_SUCCESS)
+ 		{
+ 			/* Error closing the file, call error handler. */
+ 			Error_Handler();
+ 		        }
+ 		status = fx_media_close(&sdio_disk);
+
+ 			/* Check the media close status. */
+ 			if (status != FX_SUCCESS)
+ 			{
+ 				/* Error closing the media, call error handler. */
+ 				Error_Handler();
+ 			}
+ }
+int Custom_Sprintf(FX_FILE *Archivo,const char *format,...)
+{
+	UINT status;
+	char buffer[1024] ={ 0 };
+	va_list args;
+	va_start(args, format);
+	int i;
+
+	i = vsprintf(buffer, format, args);
+	va_end(args);
+	//HAL_GPIO_WritePin(DebugGPIO_GPIO_Port, DebugGPIO_Pin, GPIO_PIN_RESET);
+	fx_file_relative_seek(Archivo,0,FX_SEEK_END);
+	//HAL_GPIO_WritePin(DebugGPIO_GPIO_Port, DebugGPIO_Pin, GPIO_PIN_SET);
+	status = fx_file_write(&fx_file, buffer, strlen(buffer));
+	//HAL_GPIO_WritePin(DebugGPIO_GPIO_Port, DebugGPIO_Pin, GPIO_PIN_RESET);
+		/* Check the file write status. */
+	if (status != FX_SUCCESS)
+		{
+			/* Error writing to a file, call error handler. */
+			Error_Handler();
+		}
+	return i;
+}
+void LecturaTexto(void)
+{
+	UINT status;
+	ULONG bytes_read;
+	CHAR read_buffer[50];
+
+	/* Open the sdio_disk driver. */
+	status = fx_media_open(&sdio_disk, "STM32_SRAM_DISK", fx_stm32_levelx_nor_driver,
+			(VOID *)LX_NOR_OSPI_DRIVER_ID, (VOID *) fx_nor_ospi_media_memory, sizeof(fx_nor_ospi_media_memory));
+
+	/* Check the media open status. */
+	if (status != FX_SUCCESS)
+	{
+		Error_Handler();
+	}
+	/* Open the test file. */
+	status = fx_file_open(&sdio_disk, &fx_file, "STM32.txt", FX_OPEN_FOR_READ);
+
+	/* Check the file open status. */
+	if (status != FX_SUCCESS)
+	{
+		/* Error opening file, call error handler. */
+		Error_Handler();
+	}
+
+	/* Seek to the beginning of the test file. */
+	status = fx_file_seek(&fx_file, 0);
+
+	/* Check the file seek status. */
+	if (status != FX_SUCCESS)
+	{
+		/* Error performing file seek, call error handler. */
+		Error_Handler();
+	}
+
+	/* Read the first 28 bytes of the test file. */
+	status = fx_file_read(&fx_file, read_buffer, 22, &bytes_read);
+
+	/* Check the file read status. */
+	if ((status != FX_SUCCESS) || (bytes_read != 22))
+	{
+		/* Error reading file, call error handler. */
+		Error_Handler();
+	}
+
+	/* Close the test file. */
+	status = fx_file_close(&fx_file);
+
+	/* Check the file close status. */
+	if (status != FX_SUCCESS)
+	{
+		/* Error closing the file, call error handler. */
+		Error_Handler();
+	}
+
+	/* Close the media. */
+	status = fx_media_close(&sdio_disk);
+
+	/* Check the media close status. */
+	if (status != FX_SUCCESS)
+	{
+		/* Error closing the media, call error handler. */
+		Error_Handler();
+	}
 }
 /* USER CODE END 1 */

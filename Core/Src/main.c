@@ -60,6 +60,7 @@ static void MX_OCTOSPI1_Init(void);
 static void MX_ICACHE_Init(void);
 static void MX_DCACHE1_Init(void);
 /* USER CODE BEGIN PFP */
+int t;
 void W25Q128EnableWrite(void);
 void W25Q128BorradoCompleto();
 extern void Formateo();
@@ -69,6 +70,9 @@ extern void Formateo();
 /* USER CODE BEGIN 0 */
 uint8_t formatear;
 uint8_t FormateoMemeoria;
+uint8_t CrearArchivo;
+uint8_t fRead;
+uint8_t fcarpeta;
 /* USER CODE END 0 */
 
 /**
@@ -118,14 +122,31 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  if(formatear == 1)
 	  {
+		  DWT->CTRL |= 0x1UL;
+		  DWT->CYCCNT = 0;
 		  formatear = 0;
 	  	  Formateo();
+	  	  t = DWT->CYCCNT;
 	  }
 	  if(FormateoMemeoria == 1)
 	  {
 		  FormateoMemeoria = 0;
 		  W25Q128BorradoCompleto();
 	  }
+	  if(CrearArchivo != 0)
+	  {
+		  CrearArchivo = 0;
+		  CrearArchi();
+	  }
+	  if (fRead)
+	  {
+		fRead = 0;
+		LecturaTexto();
+	  }
+		if (fcarpeta) {
+			fcarpeta = 0;
+			CreacionCarpeta("Carpeta1");
+		}
   }
   /* USER CODE END 3 */
 }
