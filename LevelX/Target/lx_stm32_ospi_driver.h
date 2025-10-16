@@ -30,8 +30,8 @@ extern "C" {
 /* USER CODE END ET */
 
 /* The following semaphore is being to notify about RX/TX completion. It needs to be released in the transfer callbacks */
-extern __IO UINT ospi_rx_cplt;
-extern __IO UINT ospi_tx_cplt;
+extern TX_SEMAPHORE xspi_rx_semaphore;
+extern TX_SEMAPHORE xspi_tx_semaphore;
 
 /* Exported constants --------------------------------------------------------*/
 
@@ -43,7 +43,7 @@ extern __IO UINT ospi_tx_cplt;
  */
 #define LX_STM32_OSPI_BASE_ADDRESS                       0
 
-#define LX_STM32_OSPI_DEFAULT_TIMEOUT                    (10 * 1000)
+#define LX_STM32_OSPI_DEFAULT_TIMEOUT                    10 * TX_TIMER_TICKS_PER_SECOND
 
 #define LX_STM32_DEFAULT_SECTOR_SIZE                     LX_STM32_OSPI_SECTOR_SIZE
 #define LX_STM32_OSPI_DMA_API                            1
@@ -67,11 +67,11 @@ extern __IO UINT ospi_tx_cplt;
 
 /* USER CODE END EM */
 
-#define LX_STM32_OSPI_CURRENT_TIME                              HAL_GetTick
+#define LX_STM32_OSPI_CURRENT_TIME                              tx_time_get
 
-/* Macro called after initializing the OSPI driver */
-
-/* USER CODE BEGIN LX_STM32_OSPI_POST_INIT */
+/* Macro called after initializing the OSPI driver
+ * e.g. create a semaphore used for transfer notification */
+ /* USER CODE BEGIN LX_STM32_OSPI_POST_INIT */
 
 #define  LX_STM32_OSPI_POST_INIT()
 
@@ -133,6 +133,7 @@ extern __IO UINT ospi_tx_cplt;
 /* USER CODE END LX_STM32_OSPI_POST_WRITE_TRANSFER */
 
 /* Macro for write error handling */
+
 /* USER CODE BEGIN LX_STM32_OSPI_WRITE_TRANSFER_ERROR */
 
 #define LX_STM32_OSPI_WRITE_TRANSFER_ERROR(__status__)

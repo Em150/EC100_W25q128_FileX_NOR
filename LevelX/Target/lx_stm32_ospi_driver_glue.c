@@ -9,9 +9,8 @@
 /*                                                                        */
 /**************************************************************************/
 #include "lx_stm32_ospi_driver.h"
-
 extern XSPI_HandleTypeDef hospi1;
-#include "stm32h5xx_hal.h"
+
 #if (LX_STM32_OSPI_INIT == 1)
 extern void MX_OCTOSPI1_Init(void);
 #endif
@@ -20,11 +19,13 @@ static uint8_t ospi_memory_reset            (XSPI_HandleTypeDef *hxspi);
 static uint8_t ospi_set_write_enable        (XSPI_HandleTypeDef *hxspi);
 static uint8_t ospi_auto_polling_ready      (XSPI_HandleTypeDef *hxspi, uint32_t timeout);
 static uint8_t ospi_set_octal_mode          (XSPI_HandleTypeDef *hxspi);
+
 /* USER CODE BEGIN SECTOR_BUFFER */
 ULONG ospi_sector_buffer[LX_STM32_OSPI_SECTOR_SIZE / sizeof(ULONG)];
 /* USER CODE END SECTOR_BUFFER */
-__IO UINT ospi_rx_cplt;
-__IO UINT ospi_tx_cplt;
+
+TX_SEMAPHORE xspi_rx_semaphore;
+TX_SEMAPHORE xspi_tx_semaphore;
 
 /* USER CODE BEGIN 0 */
 static uint8_t ospi_set_write_enable_Custom(XSPI_HandleTypeDef *hxspi);
@@ -82,6 +83,16 @@ INT lx_stm32_ospi_lowlevel_init(UINT instance)
 INT lx_stm32_ospi_lowlevel_deinit(UINT instance)
 {
   INT status = 0;
+
+  /* Delete semaphore objects */
+  tx_semaphore_delete(&xspi_tx_semaphore);
+  tx_semaphore_delete(&xspi_rx_semaphore);
+
+  /* Call the DeInit function to reset the driver */
+  if (HAL_XSPI_DeInit(&hospi1) != HAL_OK)
+  {
+    return 1;
+  }
 
   /* USER CODE BEGIN PRE_OSPI_DEINIT */
 
@@ -272,8 +283,6 @@ INT lx_stm32_ospi_read(UINT instance, ULONG *address, ULONG *buffer, ULONG words
     return 1;
   }
 
-  /* Reset the ospi_rx_cplt to 0 before reading operation */
-  ospi_rx_cplt = 0;
   /* Reception of the data */
   if (HAL_XSPI_Receive_DMA(&hospi1, (uint8_t*)buffer) != HAL_OK)
   {
@@ -306,8 +315,6 @@ INT lx_stm32_ospi_write(UINT instance, ULONG *address, ULONG *buffer, ULONG word
 
   uint32_t current_size;
   uint32_t data_buffer;
-
-  UINT timeout_start;
 
   /* USER CODE BEGIN PRE_OSPI_WRITE */
   return lx_stm32_ospi_writeW25Q125(instance,address,buffer,words);
@@ -374,42 +381,28 @@ INT lx_stm32_ospi_write(UINT instance, ULONG *address, ULONG *buffer, ULONG word
     {
       return 1;
     }
-    /* Check success of the transmission of the data */
 
-    timeout_start = HAL_GetTick();
-    while (HAL_GetTick() - timeout_start < LX_STM32_OSPI_DEFAULT_TIMEOUT)
+    /* Check success of the transmission of the data */
+    if(tx_semaphore_get(&xspi_tx_semaphore, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != TX_SUCCESS)
     {
-      if (ospi_tx_cplt == 1)
-        break;
+     return 1;
     }
 
-    if (ospi_tx_cplt == 0)
+    /* Configure automatic polling mode to wait for end of program */
+    if (ospi_auto_polling_ready(&hospi1, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != 0)
     {
       return 1;
     }
-    else
-    {
-      /* Configure automatic polling mode to wait for end of program */
-      if (ospi_auto_polling_ready(&hospi1, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != 0)
-      {
-        /* on Error reset the ospi_tx_cplt to 0 to make the LX_STM32_OSPI_WRITE_CPLT_NOTIFY() fail */
-        ospi_tx_cplt = 0;
-        return 1;
-      }
-      else
-      {
-        /* Update the address and data variables for next page programming */
-        current_addr += current_size;
-        data_buffer += current_size;
 
-        current_size = ((current_addr + LX_STM32_OSPI_PAGE_SIZE) > end_addr) ? (end_addr - current_addr) : LX_STM32_OSPI_PAGE_SIZE;
-      }
-    }
-  } while(current_addr < end_addr);
+    /* Update the address and data variables for next page programming */
+    current_addr += current_size;
+    data_buffer += current_size;
 
-/* at this stage the write operation is successful and the ospi_tx_cplt is set to 1
- * thus LX_STM32_OSPI_WRITE_CPLT_NOTIFY() will correctly notify the low-level driver
- */
+    current_size = ((current_addr + LX_STM32_OSPI_PAGE_SIZE) > end_addr) ? (end_addr - current_addr) : LX_STM32_OSPI_PAGE_SIZE;
+  } while (current_addr < end_addr);
+
+   /* Release xspi_transfer_semaphore in case of writing success */
+    tx_semaphore_put(&xspi_tx_semaphore);
 
   /* USER CODE BEGIN POST_OSPI_WRITE */
 
@@ -437,6 +430,7 @@ INT lx_stm32_ospi_erase(UINT instance, ULONG block, ULONG erase_count, UINT full
   /* USER CODE END PRE_OSPI_ERASE */
 
   /* Initialize the erase command */
+
   s_command.OperationType         = HAL_XSPI_OPTYPE_COMMON_CFG;
   s_command.IOSelect              = HAL_XSPI_SELECT_IO_7_0;;
   s_command.InstructionMode       = HAL_XSPI_INSTRUCTION_8_LINES;
@@ -915,14 +909,13 @@ static uint8_t ospi_set_octal_mode(XSPI_HandleTypeDef *hxspi)
   * @param  hxspi XSPI handle
   * @retval None
   */
-
 void HAL_XSPI_RxCpltCallback(XSPI_HandleTypeDef *hxspi)
 {
   /* USER CODE BEGIN PRE_RX_CMPLT */
 
   /* USER CODE END PRE_RX_CMPLT */
 
-  ospi_rx_cplt = 1;
+  tx_semaphore_put(&xspi_rx_semaphore);
 
   /* USER CODE BEGIN POST_RX_CMPLT */
 
@@ -934,20 +927,18 @@ void HAL_XSPI_RxCpltCallback(XSPI_HandleTypeDef *hxspi)
   * @param  hxspi XSPI handle
   * @retval None
   */
-
 void HAL_XSPI_TxCpltCallback(XSPI_HandleTypeDef *hxspi)
 {
   /* USER CODE BEGIN PRE_TX_CMPLT */
 
   /* USER CODE END PRE_TX_CMPLT */
 
-  ospi_tx_cplt = 1;
+  tx_semaphore_put(&xspi_tx_semaphore);
 
   /* USER CODE BEGIN POST_TX_CMPLT */
 
   /* USER CODE END POST_TX_CMPLT */
 }
-
 /* USER CODE BEGIN 1 */
 static uint8_t ospi_set_write_enable_Custom(XSPI_HandleTypeDef *hxspi)
 {

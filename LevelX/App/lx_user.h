@@ -128,7 +128,7 @@
 
 /* Defined, LevelX will be used in standalone mode (without Azure RTOS ThreadX) */
 
-#define LX_STANDALONE_ENABLE
+/* #define LX_STANDALONE_ENABLE */
 
 /* USER CODE BEGIN 2 */
 

@@ -17,8 +17,8 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include "app_threadx.h"
 #include "main.h"
-#include "app_filex.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -106,12 +106,15 @@ int main(void)
   MX_GPIO_Init();
   MX_GPDMA1_Init();
   MX_OCTOSPI1_Init();
-  MX_FileX_Init();
   MX_ICACHE_Init();
   MX_DCACHE1_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
+
+  MX_ThreadX_Init();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
