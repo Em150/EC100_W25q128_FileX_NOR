@@ -73,7 +73,16 @@ extern TX_SEMAPHORE xspi_tx_semaphore;
  * e.g. create a semaphore used for transfer notification */
  /* USER CODE BEGIN LX_STM32_OSPI_POST_INIT */
 
-#define  LX_STM32_OSPI_POST_INIT()
+#define LX_STM32_OSPI_POST_INIT()                        do { \
+                                                         if (tx_semaphore_create(&xspi_rx_semaphore, "xspi rx transfer semaphore", 0) != TX_SUCCESS) \
+                                                         { \
+                                                           return LX_ERROR; \
+                                                         } \
+                                                         if (tx_semaphore_create(&xspi_tx_semaphore, "xspi tx transfer semaphore", 0) != TX_SUCCESS) \
+                                                         { \
+                                                           return LX_ERROR; \
+                                                         } \
+                                                        } while(0)
 
 /* USER CODE END LX_STM32_OSPI_POST_INIT */
 
@@ -89,7 +98,12 @@ extern TX_SEMAPHORE xspi_tx_semaphore;
 
 /* USER CODE BEGIN LX_STM32_OSPI_READ_CPLT_NOTIFY */
 
-#define LX_STM32_OSPI_READ_CPLT_NOTIFY(__status__)
+#define LX_STM32_OSPI_READ_CPLT_NOTIFY(__status__)      do { \
+                                                          if(tx_semaphore_get(&xspi_rx_semaphore, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != TX_SUCCESS) \
+                                                          { \
+                                                            __status__ = LX_ERROR; \
+                                                          } \
+                                                        } while(0)
 
 /* USER CODE END LX_STM32_OSPI_READ_CPLT_NOTIFY */
 
@@ -120,7 +134,12 @@ extern TX_SEMAPHORE xspi_tx_semaphore;
 
 /* USER CODE BEGIN LX_STM32_OSPI_WRITE_CPLT_NOTIFY */
 
-#define LX_STM32_OSPI_WRITE_CPLT_NOTIFY(__status__)
+#define LX_STM32_OSPI_WRITE_CPLT_NOTIFY(__status__)     do { \
+                                                          if(tx_semaphore_get(&xspi_tx_semaphore, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != TX_SUCCESS) \
+                                                          { \
+                                                            __status__ = LX_ERROR; \
+                                                          } \
+                                                        } while(0)
 
 /* USER CODE END LX_STM32_OSPI_WRITE_CPLT_NOTIFY */
 
@@ -173,9 +192,9 @@ UINT lx_stm32_ospi_initialize(LX_NOR_FLASH *nor_flash);
 #define LX_STM32_OSPI_DUMMY_CYCLES_READ_OCTAL     0
 #define LX_STM32_OSPI_DUMMY_CYCLES_CR_CFG         0
 
-#define LX_STM32_OSPI_SECTOR_SIZE                 0x1000
-#define LX_STM32_OSPI_FLASH_SIZE                  0x1000000
-#define LX_STM32_OSPI_PAGE_SIZE                   0x100
+#define LX_STM32_OSPI_SECTOR_SIZE                 (uint32_t)(4  * 1024)
+#define LX_STM32_OSPI_FLASH_SIZE                  (uint32_t)(128*1024*1024/8)
+#define LX_STM32_OSPI_PAGE_SIZE                   (uint32_t) 256
 
 #define LX_STM32_OSPI_BULK_ERASE_MAX_TIME         200000
 #define LX_STM32_OSPI_SECTOR_ERASE_MAX_TIME       400

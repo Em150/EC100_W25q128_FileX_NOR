@@ -35,7 +35,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* Main thread stack size */
-#define FX_APP_THREAD_STACK_SIZE         8192
+#define FX_APP_THREAD_STACK_SIZE         50000
 /* Main thread priority */
 #define FX_APP_THREAD_PRIO               10
 /* USER CODE BEGIN PD */
@@ -59,7 +59,12 @@ FX_MEDIA        sdio_disk;
 //FX_MEDIA sram_disk;
 /* FileX file instance */
 FX_FILE fx_file;
-
+uint8_t formatear;
+uint8_t FormateoMemeoria;
+uint8_t CrearArchivo;
+uint8_t fRead;
+uint8_t fcarpeta;
+int t;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -73,7 +78,8 @@ int Custom_Sprintf(FX_FILE *NomArchivo ,const char *format,...);
 void CrearArchi(void);
 void LecturaTexto(void);
 void CreacionCarpeta(char *NomCarpeta);
-
+extern void W25Q128EnableWrite(void);
+extern void W25Q128BorradoCompleto();
 /* USER CODE END PFP */
 
 /**
@@ -137,7 +143,39 @@ UINT MX_FileX_Init(VOID *memory_ptr)
  {
 
 /* USER CODE BEGIN fx_app_thread_entry 0*/
+	 while (1)
+	   {
+	     /* USER CODE END WHILE */
 
+	     /* USER CODE BEGIN 3 */
+	 	  if(formatear == 1)
+	 	  {
+	 		  DWT->CTRL |= 0x1UL;
+	 		  DWT->CYCCNT = 0;
+	 		  formatear = 0;
+	 	  	  Formateo();
+	 	  	  t = DWT->CYCCNT;
+	 	  }
+	 	  if(FormateoMemeoria == 1)
+	 	  {
+	 		  FormateoMemeoria = 0;
+	 		  W25Q128BorradoCompleto();
+	 	  }
+	 	  if(CrearArchivo != 0)
+	 	  {
+	 		  CrearArchivo = 0;
+	 		  CrearArchi();
+	 	  }
+	 	  if (fRead)
+	 	  {
+	 		fRead = 0;
+	 		LecturaTexto();
+	 	  }
+	 		if (fcarpeta) {
+	 			fcarpeta = 0;
+	 			CreacionCarpeta("Carpeta1");
+	 		}
+	   }
 /* USER CODE END fx_app_thread_entry 0*/
 
 /* USER CODE BEGIN fx_app_thread_entry 1*/
@@ -146,6 +184,7 @@ UINT MX_FileX_Init(VOID *memory_ptr)
   }
 
 /* USER CODE BEGIN 1 */
+
 void Formateo()
 {
 	UINT status;
@@ -159,7 +198,7 @@ void Formateo()
 	            1,                          /* Número de FATs */
 	            32,                         /* Directorio raíz (entradas) */
 	            0,                          /* Sectores ocultos */
-	            (1024*1024*16/8 - 1024*4)/512,/* Total sectores lógicos */
+							(LX_STM32_OSPI_FLASH_SIZE - LX_STM32_OSPI_SECTOR_SIZE)/ 512,/* Total sectores lógicos */
 	            512,                        /* Tamaño de sector lógico en bytes */
 	            8,                          /* Sectores por clúster */
 	            1,                          /* Número de cabezas */

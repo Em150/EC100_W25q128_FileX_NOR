@@ -29,6 +29,7 @@ TX_SEMAPHORE xspi_tx_semaphore;
 
 /* USER CODE BEGIN 0 */
 static uint8_t ospi_set_write_enable_Custom(XSPI_HandleTypeDef *hxspi);
+#include "AdaptacionW25Q128FileX.h"
 /* USER CODE END 0 */
 /**
 * @brief system init for octospi levelx driver
@@ -217,38 +218,7 @@ INT lx_stm32_ospi_read(UINT instance, ULONG *address, ULONG *buffer, ULONG words
   XSPI_RegularCmdTypeDef s_command;
 
   /* USER CODE BEGIN PRE_OSPI_READ */
-	XSPI_RegularCmdTypeDef CMD = { 0 };
-	//ULONG i = 0;
-	UINT timeout_start;
-	CMD.Instruction = 0x6b;
-	CMD.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
-	CMD.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
-	CMD.DataLength = (uint32_t) words * sizeof(ULONG);
-	CMD.DataMode = HAL_XSPI_DATA_4_LINES;
-	CMD.DummyCycles = 8;
-	CMD.AddressWidth = HAL_XSPI_ADDRESS_24_BITS;
-	CMD.Address = (uint32_t)address;
-	if (HAL_XSPI_Command(&hospi1, &CMD, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-	{
-		return 1;
-	}
-	ospi_rx_cplt = 0;
-	if (HAL_XSPI_Receive_DMA(&hospi1, (uint8_t*) buffer) != HAL_OK)
-	{
-		return 1;
-	}
-	timeout_start = HAL_GetTick();
-	while (HAL_GetTick() - timeout_start < LX_STM32_OSPI_DEFAULT_TIMEOUT) {
-		if (ospi_rx_cplt == 1)
-			break;
-	}
-	/*
-	if(CMD.DataLength <=4)//lo necesito para que el procesamiento de la recepcion no sea mas rapido que la velocidad de recepcin misma
-	{
-		for(i = 0;  i < 80;i++)
-				__NOP();
-	}*/
-	 return status;
+  return lx_stm32_ospi_readW25Q125(instance,address,buffer,words);
   /* USER CODE END PRE_OSPI_READ */
 
   /* Initialize the read command */
@@ -512,31 +482,7 @@ INT lx_stm32_ospi_is_block_erased(UINT instance, ULONG block)
   INT status = 0;
 
   /* USER CODE BEGIN OSPI_BLOCK_ERASED */
-  XSPI_RegularCmdTypeDef CMD = { 0 };
-  UINT i = 0;
-  	CMD.Instruction = 0x6b;
-  	CMD.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
-  	CMD.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
-  	CMD.DataLength = LX_STM32_OSPI_SECTOR_SIZE;
-  	CMD.DataMode = HAL_XSPI_DATA_4_LINES;
-  	CMD.DummyCycles = 8;
-  	CMD.AddressWidth = HAL_XSPI_ADDRESS_24_BITS;
-  	CMD.Address = block * LX_STM32_OSPI_SECTOR_SIZE;
-  	if (HAL_XSPI_Command(&hospi1, &CMD, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-  	{
-  		return 1;
-  	}
-  	if (HAL_XSPI_Receive(&hospi1, (uint8_t*) ospi_sector_buffer,HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-  	{
-  		return 1;
-  	}
-  	for(i = 0; i < LX_STM32_OSPI_SECTOR_SIZE/sizeof(ULONG);i++)
-  	{
-  		if(ospi_sector_buffer[i] != 0xFFFFFFFFUL)
-  		{
-  			return 1;
-  		}
-  	}
+  status = lx_stm32_ospi_is_block_erasedW25Q125(instance,block);
   /* USER CODE END OSPI_BLOCK_ERASED */
 
   return status;
