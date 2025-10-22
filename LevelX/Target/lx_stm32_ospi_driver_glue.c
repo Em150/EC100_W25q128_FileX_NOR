@@ -115,7 +115,8 @@ INT lx_stm32_ospi_get_status(UINT instance)
   uint8_t reg[2];
 
   /* USER CODE BEGIN PRE_OSPI_GET_STATUS */
-	return lx_stm32_ospi_get_statusW25Q125(instance);
+  return 0;
+//	return lx_stm32_ospi_get_statusW25Q125(instance);
   /* USER CODE END PRE_OSPI_GET_STATUS */
 
   /* Initialize the read status register command */

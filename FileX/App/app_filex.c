@@ -35,11 +35,14 @@
 
 /* Private define ------------------------------------------------------------*/
 /* Main thread stack size */
-#define FX_APP_THREAD_STACK_SIZE         50000
+#define FX_APP_THREAD_STACK_SIZE         14000
 /* Main thread priority */
 #define FX_APP_THREAD_PRIO               10
 /* USER CODE BEGIN PD */
-
+#define FX_NOR_OSPI_SECTOR_SIZE 512
+#define FX_NOR_OSPI_VOLUME_NAME "Memoria W25Q128"
+#define FX_NOR_OSPI_NUMBER_OF_FATS 1
+#define FX_NOR_OSPI_HIDDEN_SECTORS 0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,20 +54,34 @@
 /* Main thread global data structures.  */
 TX_THREAD       fx_app_thread;
 
-/* USER CODE BEGIN PV */
-ALIGN_32BYTES (uint32_t fx_nor_ospi_media_memory[LX_STM32_OSPI_SECTOR_SIZE / sizeof(uint32_t)]);
+/* Buffer for FileX FX_MEDIA sector cache. */
+ALIGN_32BYTES (uint32_t fx_sd_media_memory[FX_STM32_SD_DEFAULT_SECTOR_SIZE / sizeof(uint32_t)]);
 /* Define FileX global data structures.  */
 FX_MEDIA        sdio_disk;
 
-//FX_MEDIA sram_disk;
+/* Buffer for FileX FX_MEDIA sector cache. */
+ALIGN_32BYTES (uint32_t fx_nor_ospi_media_memory[FX_NOR_OSPI_SECTOR_SIZE / sizeof(uint32_t)]);
+/* Define FileX global data structures.  */
+FX_MEDIA        nor_ospi_flash_disk;
+
+/* USER CODE BEGIN PV */
+
+
+
 /* FileX file instance */
-FX_FILE fx_file;
-uint8_t formatear;
-uint8_t FormateoMemeoria;
+//FX_FILE fx_file;
+uint8_t FormSD;
+uint8_t FormMem;
+uint8_t BorradoMem;
 uint8_t CrearArchivo;
 uint8_t fRead;
 uint8_t fcarpeta;
-int t;
+uint64_t t;
+uint8_t SdHaciaMEM;
+uint8_t MEMHaciaSD;
+ULONG TotalBytes;
+ULONG bytes_escritos;
+UCHAR buffer[512];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -73,13 +90,19 @@ int t;
 void fx_app_thread_entry(ULONG thread_input);
 
 /* USER CODE BEGIN PFP */
-void Formateo();
+void FormateoMEM();
+void FormateoSD();
 int Custom_Sprintf(FX_FILE *NomArchivo ,const char *format,...);
 void CrearArchi(void);
 void LecturaTexto(void);
 void CreacionCarpeta(char *NomCarpeta);
 extern void W25Q128EnableWrite(void);
 extern void W25Q128BorradoCompleto();
+UINT fx_copy_all_root_files(FX_MEDIA *mediaFrom,FX_MEDIA *mediaTo);
+void CopiarDesdeSdHaciaMEM(void);
+void CopiarDesdeMEMHaciaSD(void);
+static UINT fx_copy_file(FX_MEDIA *mediaFrom,FX_MEDIA *mediaTo, const CHAR *src_name, const CHAR *dst_name);
+
 /* USER CODE END PFP */
 
 /**
@@ -142,88 +165,342 @@ UINT MX_FileX_Init(VOID *memory_ptr)
  void fx_app_thread_entry(ULONG thread_input)
  {
 
-/* USER CODE BEGIN fx_app_thread_entry 0*/
-	 while (1)
-	   {
-	     /* USER CODE END WHILE */
+  UINT sd_status = FX_SUCCESS;
 
-	     /* USER CODE BEGIN 3 */
-	 	  if(formatear == 1)
-	 	  {
-	 		  DWT->CTRL |= 0x1UL;
-	 		  DWT->CYCCNT = 0;
-	 		  formatear = 0;
-	 	  	  Formateo();
-	 	  	  t = DWT->CYCCNT;
-	 	  }
-	 	  if(FormateoMemeoria == 1)
-	 	  {
-	 		  FormateoMemeoria = 0;
-	 		  W25Q128BorradoCompleto();
-	 	  }
-	 	  if(CrearArchivo != 0)
-	 	  {
-	 		  CrearArchivo = 0;
-	 		  CrearArchi();
-	 	  }
-	 	  if (fRead)
-	 	  {
-	 		fRead = 0;
-	 		LecturaTexto();
-	 	  }
-	 		if (fcarpeta) {
-	 			fcarpeta = 0;
-	 			CreacionCarpeta("Carpeta1");
-	 		}
-	   }
+  UINT nor_ospi_status = FX_SUCCESS;
+
+/* USER CODE BEGIN fx_app_thread_entry 0*/
+
 /* USER CODE END fx_app_thread_entry 0*/
 
-/* USER CODE BEGIN fx_app_thread_entry 1*/
+/* Open the SD disk driver */
+  sd_status =  fx_media_open(&sdio_disk, FX_SD_VOLUME_NAME, fx_stm32_sd_driver, (VOID *)FX_NULL, (VOID *) fx_sd_media_memory, sizeof(fx_sd_media_memory));
 
+/* Check the media open sd_status */
+  if (sd_status != FX_SUCCESS)
+  {
+     /* USER CODE BEGIN SD DRIVER get info error */
+		while (1);
+    /* USER CODE END SD DRIVER get info error */
+  }
+
+  /* Open the OCTO-SPI NOR driver */
+ nor_ospi_status =  fx_media_open(&nor_ospi_flash_disk, FX_NOR_OSPI_VOLUME_NAME, fx_stm32_levelx_nor_driver, (VOID *)LX_NOR_OSPI_DRIVER_ID, (VOID *) fx_nor_ospi_media_memory, sizeof(fx_nor_ospi_media_memory));
+
+/* Check the media open nor_ospi_status */
+  if (nor_ospi_status != FX_SUCCESS)
+  {
+    /* USER CODE BEGIN OCTO-SPI NOR open error */
+		while (1);
+    /* USER CODE END OCTO-SPI NOR open error */
+  }
+
+/* USER CODE BEGIN fx_app_thread_entry 1*/
+	while (1)
+	{
+		if (FormMem != 0)
+		{
+			DWT->CTRL |= 0x1UL;
+			DWT->CYCCNT = 0;
+			FormMem = 0;
+			FormateoMEM();
+			t = DWT->CYCCNT;
+		}
+		if (FormSD != 0)
+		{
+			DWT->CTRL |= 0x1UL;
+			DWT->CYCCNT = 0;
+			FormSD = 0;
+			FormateoSD();
+			t = DWT->CYCCNT;
+		}
+		if (BorradoMem != 0)
+		{
+			BorradoMem = 0;
+			W25Q128BorradoCompleto();
+		}
+		if (CrearArchivo != 0)
+		{
+			CrearArchivo = 0;
+			CrearArchi();
+		}
+		if (fRead)
+		{
+			fRead = 0;
+			LecturaTexto();
+		}
+		if (fcarpeta)
+		{
+			fcarpeta = 0;
+			CreacionCarpeta("Carpeta1");
+		}
+		if(SdHaciaMEM)
+		{
+			DWT->CTRL |= 0x1UL;
+			DWT->CYCCNT = 0;
+			SdHaciaMEM = 0;
+			CopiarDesdeSdHaciaMEM();
+			t = DWT->CYCCNT;
+		}
+		if (MEMHaciaSD)
+		{
+			DWT->CTRL |= 0x1UL;
+			DWT->CYCCNT = 0;
+			MEMHaciaSD = 0;
+			CopiarDesdeMEMHaciaSD();
+			t = DWT->CYCCNT;
+		}
+	}
 /* USER CODE END fx_app_thread_entry 1*/
   }
 
 /* USER CODE BEGIN 1 */
-
-void Formateo()
+void CopiarDesdeSdHaciaMEM(void)
+{
+	uint8_t status = 0;
+	status = fx_copy_all_root_files(&sdio_disk, &nor_ospi_flash_disk);
+	if(status != 0)
+	{
+		while(1);
+	}
+}
+void CopiarDesdeMEMHaciaSD(void)
+{
+	uint8_t status = 0;
+	status = fx_copy_all_root_files(&nor_ospi_flash_disk, &sdio_disk);
+	if(status != 0)
+		{
+			while(1);
+		}
+}
+static UINT fx_copy_file(FX_MEDIA *mediaFrom,FX_MEDIA *mediaTo, const CHAR *src_name, const CHAR *dst_name)
 {
 	UINT status;
-	status = fx_media_format(
-	            &sdio_disk,                 /* Control block */
-	            fx_stm32_levelx_nor_driver, /* Driver entry */
-	            (VOID *)LX_NOR_OSPI_DRIVER_ID,                  /* Device info pointer */
-	            (UCHAR *)fx_nor_ospi_media_memory,/* Media buffer */
-				sizeof(fx_nor_ospi_media_memory),                        /* Media buffer size en bytes */
-	            "DEAD",                     /* Volume Name (4 caracteres) */
-	            1,                          /* Número de FATs */
-	            32,                         /* Directorio raíz (entradas) */
-	            0,                          /* Sectores ocultos */
-							(LX_STM32_OSPI_FLASH_SIZE - LX_STM32_OSPI_SECTOR_SIZE)/ 512,/* Total sectores lógicos */
-	            512,                        /* Tamaño de sector lógico en bytes */
-	            8,                          /* Sectores por clúster */
-	            1,                          /* Número de cabezas */
-	            1                           /* Sectores por pista */
-	        );                                     // Sectors per track
+	FX_FILE src_file;
+	FX_FILE dst_file;
+
+	ULONG bytes_read = 0;
+
+
+
+	/* Abrir archivo origen para lectura */
+	status = fx_file_open(mediaFrom, &src_file, (CHAR* )src_name, FX_OPEN_FOR_READ);
+	if (status != FX_SUCCESS)
+		return status;
+
+	/* Crear/abrir archivo destino para escritura (si existe, se sobrescribe) */
+	status = fx_file_create(mediaTo, (CHAR*) dst_name);
+	if ((status != FX_SUCCESS) && (status != FX_ALREADY_CREATED))
+	{
+		fx_file_close(&src_file);
+		return status;
+	}
+
+	status = fx_file_open(mediaTo, &dst_file, (CHAR* )dst_name, FX_OPEN_FOR_WRITE);
+	if (status != FX_SUCCESS)
+	{
+		fx_file_close(&src_file);
+		return status;
+	}
+
+	/* Colocar el puntero de destino al inicio */
+	status = fx_file_seek(&dst_file, 0);
+	if (status != FX_SUCCESS)
+		goto copy_error;
+
+	/* Bucle de lectura/escritura */
+	TotalBytes = src_file.fx_file_current_file_size;
+	bytes_escritos = 0;
+	status = fx_file_allocate(&dst_file, TotalBytes);
+	while (bytes_escritos < TotalBytes)
+	{
+		if (TotalBytes - bytes_escritos  > 512)
+			status = fx_file_read(&src_file, buffer, sizeof(buffer), &bytes_read);
+		else
+			status = fx_file_read(&src_file, buffer, TotalBytes - bytes_escritos, &bytes_read);
+
+
+		/* Si no hay bytes leídos, terminamos */
+		if (bytes_read == 0)
+		{
+			status = FX_SUCCESS;
+			break;
+		}
+
+		/* Escribir los bytes leídos en el archivo destino */
+		status = fx_file_write(&dst_file, buffer, bytes_read);
+		if (status != FX_SUCCESS)
+			goto copy_error;
+		else
+			bytes_escritos += 512;
+	}
+	/* Asegurar datos en media */
+	status = fx_media_flush(mediaTo);
+	if (status != FX_SUCCESS)
+		goto copy_error;
+
+	/* Cerrar archivos */
+	fx_file_close(&src_file);
+	fx_file_close(&dst_file);
+
+	return FX_SUCCESS;
+
+	copy_error:
+	/* Intentar cerrar archivos si es necesario */
+	fx_file_close(&src_file);
+	fx_file_close(&dst_file);
+	return status;
+}
+
+/* Copia todos los archivos del directorio raíz añadiendo "_COPY" al nombre destino */
+UINT fx_copy_all_root_files(FX_MEDIA *mediaFrom,FX_MEDIA *mediaTo)
+{
+	UINT         status, attributes, year, month, day;
+	CHAR         entry_name_From[FX_MAX_LONG_NAME_LEN];
+	CHAR         entry_name_New[FX_MAX_LONG_NAME_LEN];
+	ULONG        size;
+	UINT         hour, minute, second;
+	/* Iniciar la búsqueda en la raíz (nombre de directorio: "/") */
+	status = fx_directory_first_entry_find(mediaFrom, entry_name_From);
+	if (status != FX_SUCCESS)
+	{
+		/* Puede devolver FX_NO_MORE_ENTRIES si no hay nada */
+		return status;
+	}
+
+	do
+	{
+		status = fx_directory_information_get(mediaFrom, entry_name_From, &attributes, &size, &year, &month, &day, &hour, &minute, &second);
+		if (status != FX_SUCCESS)
+		{
+			return status;
+		}
+		/* Saltar entradas de directorio (carpetas) y entradas ocultas '.' */
+		if (attributes & FX_ARCHIVE)
+		{
+			/* Construir nombre destino: original + "_COPY" (asegurarse de no desbordar buffer) */
+			size_t name_len = strlen(entry_name_From);
+			if (name_len + 6 < sizeof(entry_name_New))
+			{
+				strcpy(entry_name_New, entry_name_From);
+				//strcat(entry_name_New, "_COPY");
+
+				/* Intentar copiar; si falla, continuar con el siguiente archivo */
+				status = fx_copy_file(mediaFrom, mediaTo, entry_name_From, entry_name_New);
+				if (status != FX_SUCCESS)
+				{
+					/* opcional: manejar/loggear el error; aquí se ignora para continuar */
+				}
+			}
+		}
+
+		status = fx_directory_next_entry_find(mediaFrom, entry_name_From);
+	} while (status == FX_SUCCESS);
+
+	/* Si status es FX_NO_MORE_ENTRIES, entonces finalizó correctamente */
+	if (status == FX_NO_MORE_ENTRIES)
+	{
+		return FX_SUCCESS;
+	}
+
+	return status;
+}
+
+void FormateoSD()
+{
+	UINT status;
+	status = fx_media_close(&sdio_disk);
+
+	/* Check the media close status. */
+	if (status != FX_SUCCESS)
+	{
+		/* Error closing the media, call error handler. */
+		Error_Handler();
+	}
+ 	status = fx_media_format(&sdio_disk,                              // RamDisk pointer
+ 								fx_stm32_sd_driver,                    // Driver entry
+ 	                            (VOID *)FX_NULL,                         // Device info pointer
+ 	                            (UCHAR *) fx_sd_media_memory,                  // Media buffer pointer
+ 								512,                                     // Media buffer size
+ 	                            "SD Card 2GB",                       // Volume Name
+ 	                            1,                                       // Number of FATs
+ 	                            32,                                      // Directory Entries
+ 	                            0,                                       // Hidden sectors
+ 								4194304,										 // Total sectors
+ 								FX_STM32_SD_DEFAULT_SECTOR_SIZE,                     // Sector size
+ 	                            2,                                       // Sectors per cluster
+ 	                            1,                                       // Heads
+ 	                            1);                                      // Sectors per track
+
+	/* Check the format status */
+	if (status != FX_SUCCESS)
+	{
+		Error_Handler();
+	}
+	status =  fx_media_open(&sdio_disk, FX_SD_VOLUME_NAME, fx_stm32_sd_driver, (VOID *)FX_NULL, (VOID *) fx_sd_media_memory, sizeof(fx_sd_media_memory));
+
+/* Check the media open sd_status */
+  if (status != FX_SUCCESS)
+  {
+     /* USER CODE BEGIN SD DRIVER get info error */
+		while (1);
+    /* USER CODE END SD DRIVER get info error */
+  }
+}
+void FormateoMEM()
+{
+	UINT status;
+	status = fx_media_close(&nor_ospi_flash_disk);
+
+	/* Check the media close status. */
+	if (status != FX_SUCCESS)
+	{
+		/* Error closing the media, call error handler. */
+		Error_Handler();
+	}
+	status =  				  fx_media_format(&nor_ospi_flash_disk,                                                           // nor_ospi_flash_disk pointer
+                                     fx_stm32_levelx_nor_driver,                                                     // Driver entry
+                                     (VOID *)LX_NOR_OSPI_DRIVER_ID,                                                  // Device info pointer
+                                     (UCHAR *) fx_nor_ospi_media_memory,                                             // Media buffer pointer
+                                     sizeof(fx_nor_ospi_media_memory),                                               // Media buffer size
+                                     FX_NOR_OSPI_VOLUME_NAME,                                                        // Volume Name
+                                     FX_NOR_OSPI_NUMBER_OF_FATS,                                                     // Number of FATs
+                                     32,                                                                             // Directory Entries
+                                     FX_NOR_OSPI_HIDDEN_SECTORS,                                                     // Hidden sectors
+                                     (LX_STM32_OSPI_FLASH_SIZE - LX_STM32_OSPI_SECTOR_SIZE)/ FX_NOR_OSPI_SECTOR_SIZE,// Total sectors minus one
+                                     FX_NOR_OSPI_SECTOR_SIZE,                                                        // Sector size
+                                     8,                                                                              // Sectors per cluster
+                                     1,                                                                              // Heads
+                                     1);                                                                             // Sectors per track
+                                   // Sectors per track
 
 	  /* Check the format status */
 	  if (status != FX_SUCCESS)
 	  {
 	    Error_Handler();
 	  }
+	status = fx_media_open(&nor_ospi_flash_disk, FX_NOR_OSPI_VOLUME_NAME, fx_stm32_levelx_nor_driver, (VOID *)LX_NOR_OSPI_DRIVER_ID, (VOID *) fx_nor_ospi_media_memory, sizeof(fx_nor_ospi_media_memory));
+
+	/* Check the media open nor_ospi_status */
+	if (status != FX_SUCCESS)
+	{
+		while (1);
+	}
 }
 void CrearArchi(void)
  {
 	UINT status;
 	CHAR data[1024] = "Texto aburrido";
+	FX_FILE fx_file;
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	status = fx_media_open(&sdio_disk, "STM32_SRAM_DISK", fx_stm32_levelx_nor_driver,
-			(VOID *)LX_NOR_OSPI_DRIVER_ID, (VOID *) fx_nor_ospi_media_memory,
-			sizeof(fx_nor_ospi_media_memory));
-
-	/* Check the media open status. */
-	if (status != FX_SUCCESS) {
-		Error_Handler();
-	}
+//	status = fx_media_open(&nor_ospi_flash_disk, "STM32_SRAM_DISK", fx_stm32_levelx_nor_driver,
+//			(VOID *)LX_NOR_OSPI_DRIVER_ID, (VOID *) fx_nor_ospi_media_memory,
+//			sizeof(fx_nor_ospi_media_memory));
+//
+//	/* Check the media open status. */
+//	if (status != FX_SUCCESS) {
+//		Error_Handler();
+//	}
 	//fx_file_delete(&sdio_disk, "STM32.TXT");
 	status = fx_file_delete(&sdio_disk, "STM32.txt");
 	if (status == FX_NOT_FOUND || status == FX_SUCCESS) {
@@ -277,109 +554,111 @@ void CrearArchi(void)
 		/* Error closing the file, call error handler. */
 		Error_Handler();
 	}
-	status = fx_media_close(&sdio_disk);
-
-	/* Check the media close status. */
-	if (status != FX_SUCCESS) {
-		/* Error closing the media, call error handler. */
-		Error_Handler();
-	}
+//	status = fx_media_close(&nor_ospi_flash_disk);
+//
+//	/* Check the media close status. */
+//	if (status != FX_SUCCESS) {
+//		/* Error closing the media, call error handler. */
+//		Error_Handler();
+//	}
 }
 void CreacionCarpeta(char *NomCarpeta)
- {
- 	UINT status;
- 		CHAR data[1024] = "Texto aburrido";
-	status = fx_media_open(&sdio_disk, "STM32_SRAM_DISK",
-			fx_stm32_levelx_nor_driver, (VOID *)LX_NOR_OSPI_DRIVER_ID,
-			(VOID *) fx_nor_ospi_media_memory,
-			sizeof(fx_nor_ospi_media_memory));
+{
+	UINT status;
+	CHAR data[1024] = "Texto aburrido";
+	FX_FILE fx_file;
+//	status = fx_media_open(&nor_ospi_flash_disk, "STM32_SRAM_DISK",
+//			fx_stm32_levelx_nor_driver, (VOID *)LX_NOR_OSPI_DRIVER_ID,
+//			(VOID *) fx_nor_ospi_media_memory,
+//			sizeof(fx_nor_ospi_media_memory));
 
- 	uint8_t Dato[40];
- 	Dato[0] = '\\';
- 	//Dato[1] = '\\';
- 	sprintf((char *)Dato +1,NomCarpeta);
- 	status = fx_directory_default_set(&sdio_disk,(CHAR *)Dato);
- 	if(status == FX_INVALID_PATH)
- 	{
- 		status = fx_directory_create(&sdio_disk,NomCarpeta);
- 		if (status != FX_SUCCESS)
- 			Error_Handler();
- 	}
- 	status = fx_directory_default_set(&sdio_disk,(CHAR *)Dato);
- 	if (status != FX_SUCCESS)
- 		Error_Handler();
- 	status = fx_file_delete(&sdio_disk, "STM32.txt");
- 		if(status == FX_NOT_FOUND)
- 		{
- 			  status = fx_file_create(&sdio_disk, "STM32.txt");
- 			  if(status != FX_SUCCESS)
- 			  {
- 				  Error_Handler();
- 			  }
- 		}
+	uint8_t Dato[40];
+	Dato[0] = '\\';
+	//Dato[1] = '\\';
+	sprintf((char*) Dato + 1, NomCarpeta);
+	status = fx_directory_default_set(&sdio_disk, (CHAR*) Dato);
+	if (status == FX_INVALID_PATH)
+	{
+		status = fx_directory_create(&sdio_disk, NomCarpeta);
+		if (status != FX_SUCCESS)
+			Error_Handler();
+	}
+	status = fx_directory_default_set(&sdio_disk, (CHAR*) Dato);
+	if (status != FX_SUCCESS)
+		Error_Handler();
+	status = fx_file_delete(&sdio_disk, "STM32.txt");
+	if (status == FX_NOT_FOUND)
+	{
+		status = fx_file_create(&sdio_disk, "STM32.txt");
+		if (status != FX_SUCCESS)
+		{
+			Error_Handler();
+		}
+	}
 
- 		status = fx_file_open(&sdio_disk, &fx_file, "STM32.txt", FX_OPEN_FOR_WRITE);
+	status = fx_file_open(&sdio_disk, &fx_file, "STM32.txt", FX_OPEN_FOR_WRITE);
 
- 		/* Check the file open status. */
- 		if (status != FX_SUCCESS)
- 		{
- 			/* Error opening file, call error handler. */
- 			Error_Handler();
- 		}
+	/* Check the file open status. */
+	if (status != FX_SUCCESS)
+	{
+		/* Error opening file, call error handler. */
+		Error_Handler();
+	}
 
- 		/* Seek to the beginning of the test file. */
- 		status = fx_file_seek(&fx_file, 0);
+	/* Seek to the beginning of the test file. */
+	status = fx_file_seek(&fx_file, 0);
 
- 		/* Check the file seek status. */
- 		if (status != FX_SUCCESS)
- 		{
- 			/* Error performing file seek, call error handler. */
- 			Error_Handler();
- 		}
- 		/* Write a string to the test file. */
- 		int A = 0;
- 		int B = -34252;
- 		status = fx_file_write(&fx_file, data, strlen(data));
+	/* Check the file seek status. */
+	if (status != FX_SUCCESS)
+	{
+		/* Error performing file seek, call error handler. */
+		Error_Handler();
+	}
+	/* Write a string to the test file. */
+	int A = 0;
+	int B = -34252;
+	status = fx_file_write(&fx_file, data, strlen(data));
 
- 		/* Check the file write status. */
- 		if (status != FX_SUCCESS)
- 		{
- 			/* Error writing to a file, call error handler. */
- 			Error_Handler();
- 		}
- 		Custom_Sprintf(&fx_file, "tEXT %d %d", A , B);
+	/* Check the file write status. */
+	if (status != FX_SUCCESS)
+	{
+		/* Error writing to a file, call error handler. */
+		Error_Handler();
+	}
+	Custom_Sprintf(&fx_file, "tEXT %d %d", A, B);
 
- 		/* Close the test file. */
- 		status = fx_file_close(&fx_file);
+	/* Close the test file. */
+	status = fx_file_close(&fx_file);
 
- 		/* Check the file close status. */
- 		if (status != FX_SUCCESS)
- 		{
- 			/* Error closing the file, call error handler. */
- 			Error_Handler();
- 		}
+	/* Check the file close status. */
+	if (status != FX_SUCCESS)
+	{
+		/* Error closing the file, call error handler. */
+		Error_Handler();
+	}
 
- 		status = fx_media_flush(&sdio_disk);
+	status = fx_media_flush(&sdio_disk);
 
- 		/* Check the media flush  status. */
- 		if (status != FX_SUCCESS)
- 		{
- 			/* Error closing the file, call error handler. */
- 			Error_Handler();
- 		        }
- 		status = fx_media_close(&sdio_disk);
-
- 			/* Check the media close status. */
- 			if (status != FX_SUCCESS)
- 			{
- 				/* Error closing the media, call error handler. */
- 				Error_Handler();
- 			}
- }
+	/* Check the media flush  status. */
+	if (status != FX_SUCCESS)
+	{
+		/* Error closing the file, call error handler. */
+		Error_Handler();
+	}
+// 		status = fx_media_close(&nor_ospi_flash_disk);
+//
+// 			/* Check the media close status. */
+// 			if (status != FX_SUCCESS)
+// 			{
+// 				/* Error closing the media, call error handler. */
+// 				Error_Handler();
+// 			}
+}
 int Custom_Sprintf(FX_FILE *Archivo,const char *format,...)
 {
 	UINT status;
 	char buffer[1024] ={ 0 };
+	FX_FILE fx_file;
 	va_list args;
 	va_start(args, format);
 	int i;
@@ -404,16 +683,16 @@ void LecturaTexto(void)
 	UINT status;
 	ULONG bytes_read;
 	CHAR read_buffer[50];
-
-	/* Open the sdio_disk driver. */
-	status = fx_media_open(&sdio_disk, "STM32_SRAM_DISK", fx_stm32_levelx_nor_driver,
-			(VOID *)LX_NOR_OSPI_DRIVER_ID, (VOID *) fx_nor_ospi_media_memory, sizeof(fx_nor_ospi_media_memory));
-
-	/* Check the media open status. */
-	if (status != FX_SUCCESS)
-	{
-		Error_Handler();
-	}
+	FX_FILE fx_file;
+//	/* Open the sdio_disk driver. */
+//	status = fx_media_open(&nor_ospi_flash_disk, "STM32_SRAM_DISK", fx_stm32_levelx_nor_driver,
+//			(VOID *)LX_NOR_OSPI_DRIVER_ID, (VOID *) fx_nor_ospi_media_memory, sizeof(fx_nor_ospi_media_memory));
+//
+//	/* Check the media open status. */
+//	if (status != FX_SUCCESS)
+//	{
+//		Error_Handler();
+//	}
 	/* Open the test file. */
 	status = fx_file_open(&sdio_disk, &fx_file, "STM32.txt", FX_OPEN_FOR_READ);
 
@@ -454,14 +733,14 @@ void LecturaTexto(void)
 		Error_Handler();
 	}
 
-	/* Close the media. */
-	status = fx_media_close(&sdio_disk);
-
-	/* Check the media close status. */
-	if (status != FX_SUCCESS)
-	{
-		/* Error closing the media, call error handler. */
-		Error_Handler();
-	}
+//	/* Close the media. */
+//	status = fx_media_close(&nor_ospi_flash_disk);
+//
+//	/* Check the media close status. */
+//	if (status != FX_SUCCESS)
+//	{
+//		/* Error closing the media, call error handler. */
+//		Error_Handler();
+//	}
 }
 /* USER CODE END 1 */

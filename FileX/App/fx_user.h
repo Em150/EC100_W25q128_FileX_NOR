@@ -110,7 +110,7 @@
 /* Defines the size in bytes of the bit map used to update the secondary FAT sectors.
    The larger the value the less unnecessary secondary FAT sector writes.   */
 
-/* #define FX_FAT_MAP_SIZE         128 */
+#define FX_FAT_MAP_SIZE         1024
 
 /* Defined, data sector write requests are flushed immediately to the driver.  */
 
