@@ -143,7 +143,7 @@
 
 /* Defined, the file search cache optimization is disabled.  */
 
-/* #define FX_MEDIA_DISABLE_SEARCH_CACHE */
+#define FX_MEDIA_DISABLE_SEARCH_CACHE
 
 /* Defined, gathering of media statistics is disabled.  */
 

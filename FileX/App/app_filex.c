@@ -26,6 +26,7 @@
 #include "stdio.h"
 #include <stdarg.h>
 #include "main.h"
+#include "string.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,6 +44,7 @@
 #define FX_NOR_OSPI_VOLUME_NAME "Memoria W25Q128"
 #define FX_NOR_OSPI_NUMBER_OF_FATS 1
 #define FX_NOR_OSPI_HIDDEN_SECTORS 0
+#define MAX_PATH_LEN 260
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -81,7 +83,10 @@ uint8_t SdHaciaMEM;
 uint8_t MEMHaciaSD;
 ULONG TotalBytes;
 ULONG bytes_escritos;
-UCHAR buffer[512];
+UCHAR buffer[4096];
+CHAR DIRECTORIO[256];
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -98,7 +103,7 @@ void LecturaTexto(void);
 void CreacionCarpeta(char *NomCarpeta);
 extern void W25Q128EnableWrite(void);
 extern void W25Q128BorradoCompleto();
-UINT fx_copy_all_root_files(FX_MEDIA *mediaFrom,FX_MEDIA *mediaTo);
+static UINT fx_copy_all(FX_MEDIA *mediaFrom, FX_MEDIA *mediaTo);
 void CopiarDesdeSdHaciaMEM(void);
 void CopiarDesdeMEMHaciaSD(void);
 static UINT fx_copy_file(FX_MEDIA *mediaFrom,FX_MEDIA *mediaTo, const CHAR *src_name, const CHAR *dst_name);
@@ -258,20 +263,79 @@ UINT MX_FileX_Init(VOID *memory_ptr)
 void CopiarDesdeSdHaciaMEM(void)
 {
 	uint8_t status = 0;
-	status = fx_copy_all_root_files(&sdio_disk, &nor_ospi_flash_disk);
-	if(status != 0)
+//	status = fx_directory_local_path_set(&sdio_disk, &PathSD, "\\");
+//	if (status != 0)
+//	{
+//		while (1);
+//	}
+//	status = fx_directory_local_path_set(&nor_ospi_flash_disk, &PathMEM, "\\");
+//	if (status != 0)
+//	{
+//		while (1);
+//	}
+//	status = fx_directory_local_path_set(&sdio_disk, &pathFrom, "\\");
+//	if (status != 0)
+//	{
+//		while (1);
+//	}
+//	status = fx_directory_local_path_set(&sdio_disk, &pathTo, "\\");
+//	if (status != 0)
+//	{
+//		while (1);
+//	}
+
+	for(int i = 0; i < 256;i++)
+		DIRECTORIO[i] = 0;
+	status = fx_copy_all(&sdio_disk, &nor_ospi_flash_disk);
+	if (status != 0)
 	{
-		while(1);
+		while (1);
 	}
+//	status = fx_directory_local_path_clear(&sdio_disk);
+//	if (status != 0)
+//	{
+//		while (1);
+//	}
+//	status = fx_directory_local_path_clear(&nor_ospi_flash_disk);
+//	if (status != 0)
+//	{
+//		while (1);
+//	}
+
 }
 void CopiarDesdeMEMHaciaSD(void)
 {
 	uint8_t status = 0;
-	status = fx_copy_all_root_files(&nor_ospi_flash_disk, &sdio_disk);
-	if(status != 0)
-		{
-			while(1);
-		}
+//	status = fx_directory_local_path_set(&sdio_disk, &PathSD, "\\");
+//	if (status != 0)
+//	{
+//		while (1);
+//	}
+//	status = fx_directory_local_path_set(&nor_ospi_flash_disk, &PathMEM, "\\");
+//	if (status != 0)
+//	{
+//		while (1);
+//	}
+//	status = fx_copy_all_root_files(&nor_ospi_flash_disk, &sdio_disk);
+//	if (status != 0)
+//	{
+//		while (1);
+//	}
+	status = fx_copy_all(&nor_ospi_flash_disk, &sdio_disk);
+	if (status != 0)
+	{
+		while (1);
+	}
+//	status = fx_directory_local_path_clear(&sdio_disk);
+//	if (status != 0)
+//	{
+//		while (1);
+//	}
+//	status = fx_directory_local_path_clear(&nor_ospi_flash_disk);
+//	if (status != 0)
+//	{
+//		while (1);
+//	}
 }
 static UINT fx_copy_file(FX_MEDIA *mediaFrom,FX_MEDIA *mediaTo, const CHAR *src_name, const CHAR *dst_name)
 {
@@ -314,8 +378,8 @@ static UINT fx_copy_file(FX_MEDIA *mediaFrom,FX_MEDIA *mediaTo, const CHAR *src_
 	status = fx_file_allocate(&dst_file, TotalBytes);
 	while (bytes_escritos < TotalBytes)
 	{
-		if (TotalBytes - bytes_escritos  > 512)
-			status = fx_file_read(&src_file, buffer, sizeof(buffer), &bytes_read);
+		if (TotalBytes - bytes_escritos  > sizeof(buffer))
+			status = fx_file_read(&src_file, buffer,sizeof(buffer) , &bytes_read);
 		else
 			status = fx_file_read(&src_file, buffer, TotalBytes - bytes_escritos, &bytes_read);
 
@@ -332,7 +396,7 @@ static UINT fx_copy_file(FX_MEDIA *mediaFrom,FX_MEDIA *mediaTo, const CHAR *src_
 		if (status != FX_SUCCESS)
 			goto copy_error;
 		else
-			bytes_escritos += 512;
+			bytes_escritos += sizeof(buffer);
 	}
 	/* Asegurar datos en media */
 	status = fx_media_flush(mediaTo);
@@ -352,91 +416,162 @@ static UINT fx_copy_file(FX_MEDIA *mediaFrom,FX_MEDIA *mediaTo, const CHAR *src_
 	return status;
 }
 
-/* Copia todos los archivos del directorio raíz añadiendo "_COPY" al nombre destino */
-UINT fx_copy_all_root_files(FX_MEDIA *mediaFrom,FX_MEDIA *mediaTo)
+static UINT fx_copy_all(FX_MEDIA *mediaFrom, FX_MEDIA *mediaTo)
 {
-	UINT         status, attributes, year, month, day;
-	CHAR         entry_name_From[FX_MAX_LONG_NAME_LEN];
-	CHAR         entry_name_New[FX_MAX_LONG_NAME_LEN];
-	ULONG        size;
-	UINT         hour, minute, second;
-	/* Iniciar la búsqueda en la raíz (nombre de directorio: "/") */
-	status = fx_directory_first_entry_find(mediaFrom, entry_name_From);
-	if (status != FX_SUCCESS)
-	{
-		/* Puede devolver FX_NO_MORE_ENTRIES si no hay nada */
-		return status;
-	}
+    UINT status;
+    CHAR entry_name[FX_MAX_LONG_NAME_LEN + 1];
+    UINT attributes;
+    ULONG size;
+    UINT year, month, day, hour, minute, second;
+    CHAR current_src_dir[MAX_PATH_LEN];
+    CHAR current_dst_dir[MAX_PATH_LEN];
 
-	do
-	{
-		status = fx_directory_information_get(mediaFrom, entry_name_From, &attributes, &size, &year, &month, &day, &hour, &minute, &second);
-		if (status != FX_SUCCESS)
-		{
-			return status;
-		}
-		/* Saltar entradas de directorio (carpetas) y entradas ocultas '.' */
-		if (attributes & FX_ARCHIVE)
-		{
-			/* Construir nombre destino: original + "_COPY" (asegurarse de no desbordar buffer) */
-			size_t name_len = strlen(entry_name_From);
-			if (name_len + 6 < sizeof(entry_name_New))
-			{
-				strcpy(entry_name_New, entry_name_From);
-				//strcat(entry_name_New, "_COPY");
+    /* Guardar directorios actuales */
+    fx_directory_default_get(mediaFrom, current_src_dir);
+    fx_directory_default_get(mediaTo, current_dst_dir);
 
-				/* Intentar copiar; si falla, continuar con el siguiente archivo */
-				status = fx_copy_file(mediaFrom, mediaTo, entry_name_From, entry_name_New);
-				if (status != FX_SUCCESS)
-				{
-					/* opcional: manejar/loggear el error; aquí se ignora para continuar */
-				}
-			}
-		}
+    /* Obtener primera entrada del directorio actual */
+    status = fx_directory_first_full_entry_find(mediaFrom,
+                                                entry_name,
+                                                &attributes,
+                                                &size,
+                                                &year,
+                                                &month,
+                                                &day,
+                                                &hour,
+                                                &minute,
+                                                &second);
+    if (status != FX_SUCCESS)
+    {
+        return status;
+    }
 
-		status = fx_directory_next_entry_find(mediaFrom, entry_name_From);
-	} while (status == FX_SUCCESS);
+    while (status == FX_SUCCESS)
+    {
+        UINT should_copy = FX_TRUE;
 
-	/* Si status es FX_NO_MORE_ENTRIES, entonces finalizó correctamente */
-	if (status == FX_NO_MORE_ENTRIES)
-	{
-		return FX_SUCCESS;
-	}
+        /* 1️⃣ Filtros básicos */
+        if ((strcmp(entry_name, ".") == 0) || (strcmp(entry_name, "..") == 0))
+        {
+            should_copy = FX_FALSE;
+        }
 
-	return status;
+        /* 2️⃣ Ignorar atributos de sistema / ocultos / volumen */
+        if (should_copy &&
+            ((attributes & FX_SYSTEM) || (attributes & FX_HIDDEN) || (attributes & FX_VOLUME)))
+        {
+            should_copy = FX_FALSE;
+        }
+
+//        /* 3️⃣ Ignorar nombres específicos de sistema */
+//        if (should_copy &&
+//            ((strcasecmp(entry_name, "System Volume Information") == 0) ||
+//             (strcasecmp(entry_name, "$RECYCLE.BIN") == 0) ||
+//             (strcasecmp(entry_name, "FOUND.000") == 0)))
+//        {
+//            should_copy = FX_FALSE;
+//        }
+
+        /* 4️⃣ Solo copiar si pasó los filtros */
+        if (should_copy)
+        {
+            if (attributes & FX_DIRECTORY)
+            {
+                /* Crear subdirectorio en destino */
+                status = fx_directory_create(mediaTo, entry_name);
+                if ((status != FX_SUCCESS) && (status != FX_ALREADY_CREATED))
+                {
+                    return status;
+                }
+
+                /* Cambiar a subdirectorio */
+                status = fx_directory_default_set(mediaFrom, entry_name);
+                if (status == FX_SUCCESS)
+                {
+                    status = fx_directory_default_set(mediaTo, entry_name);
+                }
+
+                if (status == FX_SUCCESS)
+                {
+                    /* Copiar contenido del subdirectorio */
+                    status = fx_copy_all(mediaFrom, mediaTo);
+
+                    /* Regresar a directorio anterior */
+                    fx_directory_default_set(mediaFrom, current_src_dir);
+                    fx_directory_default_set(mediaTo, current_dst_dir);
+                }
+
+                if (status != FX_SUCCESS)
+                {
+                    return status;
+                }
+            }
+            else
+            {
+                /* Archivo normal */
+                status = fx_copy_file(mediaFrom, mediaTo, entry_name, entry_name);
+                if (status != FX_SUCCESS)
+                {
+                    return status;
+                }
+            }
+        }
+
+        /* 5️⃣ Ir a la siguiente entrada */
+        status = fx_directory_next_full_entry_find(mediaFrom,
+                                                   entry_name,
+                                                   &attributes,
+                                                   &size,
+                                                   &year,
+                                                   &month,
+                                                   &day,
+                                                   &hour,
+                                                   &minute,
+                                                   &second);
+    }
+
+    /* Si no hay más entradas, finalizamos con éxito */
+    if (status == FX_NO_MORE_ENTRIES)
+    {
+        status = FX_SUCCESS;
+    }
+
+    return status;
 }
-
 void FormateoSD()
 {
 	UINT status;
 	status = fx_media_close(&sdio_disk);
 
-	/* Check the media close status. */
-	if (status != FX_SUCCESS)
+	if (status == FX_SUCCESS || status == FX_NOT_OPEN)
+	{
+		status = fx_media_format(&sdio_disk,                              // RamDisk pointer
+				fx_stm32_sd_driver,                    // Driver entry
+				(VOID*) FX_NULL,                         // Device info pointer
+				(UCHAR*) fx_sd_media_memory,                  // Media buffer pointer
+				512,                                     // Media buffer size
+				"SD Card 2GB",                       // Volume Name
+				1,                                       // Number of FATs
+				32,                                      // Directory Entries
+				0,                                       // Hidden sectors
+				4194304,										 // Total sectors
+				FX_STM32_SD_DEFAULT_SECTOR_SIZE,                     // Sector size
+				2,                                       // Sectors per cluster
+				1,                                       // Heads
+				1);                                      // Sectors per track
+
+		/* Check the format status */
+		if (status != FX_SUCCESS)
+		{
+			Error_Handler();
+		}
+	}
+	else if (status != FX_SUCCESS)
 	{
 		/* Error closing the media, call error handler. */
 		Error_Handler();
 	}
- 	status = fx_media_format(&sdio_disk,                              // RamDisk pointer
- 								fx_stm32_sd_driver,                    // Driver entry
- 	                            (VOID *)FX_NULL,                         // Device info pointer
- 	                            (UCHAR *) fx_sd_media_memory,                  // Media buffer pointer
- 								512,                                     // Media buffer size
- 	                            "SD Card 2GB",                       // Volume Name
- 	                            1,                                       // Number of FATs
- 	                            32,                                      // Directory Entries
- 	                            0,                                       // Hidden sectors
- 								4194304,										 // Total sectors
- 								FX_STM32_SD_DEFAULT_SECTOR_SIZE,                     // Sector size
- 	                            2,                                       // Sectors per cluster
- 	                            1,                                       // Heads
- 	                            1);                                      // Sectors per track
 
-	/* Check the format status */
-	if (status != FX_SUCCESS)
-	{
-		Error_Handler();
-	}
 	status =  fx_media_open(&sdio_disk, FX_SD_VOLUME_NAME, fx_stm32_sd_driver, (VOID *)FX_NULL, (VOID *) fx_sd_media_memory, sizeof(fx_sd_media_memory));
 
 /* Check the media open sd_status */
@@ -453,32 +588,36 @@ void FormateoMEM()
 	status = fx_media_close(&nor_ospi_flash_disk);
 
 	/* Check the media close status. */
-	if (status != FX_SUCCESS)
+	if(status == FX_SUCCESS || status == FX_NOT_OPEN)
+	{
+		status =  				  fx_media_format(&nor_ospi_flash_disk,                                                           // nor_ospi_flash_disk pointer
+		                                     fx_stm32_levelx_nor_driver,                                                     // Driver entry
+		                                     (VOID *)LX_NOR_OSPI_DRIVER_ID,                                                  // Device info pointer
+		                                     (UCHAR *) fx_nor_ospi_media_memory,                                             // Media buffer pointer
+		                                     sizeof(fx_nor_ospi_media_memory),                                               // Media buffer size
+		                                     FX_NOR_OSPI_VOLUME_NAME,                                                        // Volume Name
+		                                     FX_NOR_OSPI_NUMBER_OF_FATS,                                                     // Number of FATs
+		                                     32,                                                                             // Directory Entries
+		                                     FX_NOR_OSPI_HIDDEN_SECTORS,                                                     // Hidden sectors
+		                                     (LX_STM32_OSPI_FLASH_SIZE - LX_STM32_OSPI_SECTOR_SIZE)/ FX_NOR_OSPI_SECTOR_SIZE,// Total sectors minus one
+		                                     FX_NOR_OSPI_SECTOR_SIZE,                                                        // Sector size
+		                                     8,                                                                              // Sectors per cluster
+		                                     1,                                                                              // Heads
+		                                     1);                                                                             // Sectors per track
+		                                   // Sectors per track
+
+			  /* Check the format status */
+			  if (status != FX_SUCCESS)
+			  {
+			    Error_Handler();
+			  }
+	}
+	else if (status != FX_SUCCESS)
 	{
 		/* Error closing the media, call error handler. */
 		Error_Handler();
 	}
-	status =  				  fx_media_format(&nor_ospi_flash_disk,                                                           // nor_ospi_flash_disk pointer
-                                     fx_stm32_levelx_nor_driver,                                                     // Driver entry
-                                     (VOID *)LX_NOR_OSPI_DRIVER_ID,                                                  // Device info pointer
-                                     (UCHAR *) fx_nor_ospi_media_memory,                                             // Media buffer pointer
-                                     sizeof(fx_nor_ospi_media_memory),                                               // Media buffer size
-                                     FX_NOR_OSPI_VOLUME_NAME,                                                        // Volume Name
-                                     FX_NOR_OSPI_NUMBER_OF_FATS,                                                     // Number of FATs
-                                     32,                                                                             // Directory Entries
-                                     FX_NOR_OSPI_HIDDEN_SECTORS,                                                     // Hidden sectors
-                                     (LX_STM32_OSPI_FLASH_SIZE - LX_STM32_OSPI_SECTOR_SIZE)/ FX_NOR_OSPI_SECTOR_SIZE,// Total sectors minus one
-                                     FX_NOR_OSPI_SECTOR_SIZE,                                                        // Sector size
-                                     8,                                                                              // Sectors per cluster
-                                     1,                                                                              // Heads
-                                     1);                                                                             // Sectors per track
-                                   // Sectors per track
 
-	  /* Check the format status */
-	  if (status != FX_SUCCESS)
-	  {
-	    Error_Handler();
-	  }
 	status = fx_media_open(&nor_ospi_flash_disk, FX_NOR_OSPI_VOLUME_NAME, fx_stm32_levelx_nor_driver, (VOID *)LX_NOR_OSPI_DRIVER_ID, (VOID *) fx_nor_ospi_media_memory, sizeof(fx_nor_ospi_media_memory));
 
 	/* Check the media open nor_ospi_status */

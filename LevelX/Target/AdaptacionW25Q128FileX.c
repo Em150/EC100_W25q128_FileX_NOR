@@ -70,14 +70,17 @@ uint8_t lx_stm32_ospi_readW25Q125(UINT instance, ULONG *address, ULONG *buffer, 
 #ifdef FX_STANDALONE_ENABLE
 	UINT timeout_start;
 #endif
-	CMD.Instruction = 0x6b;
+	//CMD.Instruction = 0x6b;
 	CMD.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
 	CMD.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
 	CMD.DataLength = (uint32_t) words * sizeof(ULONG);
-	CMD.DataMode = HAL_XSPI_DATA_4_LINES;
-	CMD.DummyCycles = 8;
+	//CMD.DataMode = HAL_XSPI_DATA_4_LINES;
+	//CMD.DummyCycles = 8;
 	CMD.AddressWidth = HAL_XSPI_ADDRESS_24_BITS;
 	CMD.Address = (uint32_t) address;
+
+	CMD.DataMode = HAL_XSPI_DATA_1_LINE;
+	CMD.Instruction = 0x03;
 	if (HAL_XSPI_Command(&hospi1, &CMD, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
 	{
 		return 1;
@@ -171,12 +174,12 @@ uint8_t lx_stm32_ospi_writeW25Q125(UINT instance, ULONG *address, ULONG *buffer,
 	s_command.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
 	s_command.AddressWidth = HAL_XSPI_ADDRESS_24_BITS;
 	s_command.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
-	s_command.DataMode = HAL_XSPI_DATA_4_LINES;
-	s_command.Instruction = LX_STM32_OSPI_OCTAL_PAGE_PROG_CMD;
+//	s_command.DataMode = HAL_XSPI_DATA_4_LINES;
+//	s_command.Instruction = LX_STM32_OSPI_OCTAL_PAGE_PROG_CMD;
 
 	//nota: cambiar a LX_STM32_OSPI_OCTAL_PAGE_PROG_CMD porque el analizador logico no lee bien estricuras en qspi
-	//s_command.Instruction = 0x02;
-	//s_command.DataMode = HAL_XSPI_DATA_1_LINE;
+	s_command.Instruction = 0x02;
+	s_command.DataMode = HAL_XSPI_DATA_1_LINE;
 	do
 	{
 		s_command.Address = current_addr;
